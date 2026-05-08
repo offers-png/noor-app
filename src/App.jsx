@@ -482,6 +482,7 @@ function Classroom({ student, parentNotes, onBack }) {
   // ── CONTINUOUS LISTEN — always on background ──────────
   const startContinuousListen=useCallback(()=>{
     if(listeningRef.current||speakingRef.current||busyRef.current) return;
+    if(micStatus==="locked") return;
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR) return;
     const rec=new SR();
@@ -728,9 +729,23 @@ function Classroom({ student, parentNotes, onBack }) {
         <button onClick={doHomework} style={{flex:1,background:"rgba(169,50,38,0.7)",border:"2px solid rgba(169,50,38,0.5)",borderRadius:12,color:"white",padding:"9px",fontSize:12,cursor:"pointer"}}>📝 Homework</button>
       </div>
 
+      {/* One-time mic unlock button — disappears after first tap */}
+      {micStatus==="locked"&&(
+        <button onClick={()=>{setMicStatus("idle");startContinuousListen();}} style={{
+          margin:"8px 14px 0",width:"calc(100% - 28px)",
+          background:"#1a7a40",border:"none",borderRadius:16,
+          color:"white",padding:"14px",fontSize:16,fontWeight:"bold",cursor:"pointer",
+          boxShadow:"0 4px 20px rgba(0,0,0,0.4)",
+          animation:"pulse 1.5s infinite",
+        }}>
+          👆 Tap once to activate microphone
+        </button>
+      )}
+
       <div style={{fontSize:10,color:"#3d7a55",padding:"6px 0 12px",textAlign:"center"}}>
         🖐 Raise hand to answer · No touch needed · Always listening
       </div>
+      <style>{`@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(26,122,64,0.5)}70%{box-shadow:0 0 0 14px rgba(26,122,64,0)}100%{box-shadow:0 0 0 0 rgba(26,122,64,0)}}`}</style>
     </div>
   );
 }
