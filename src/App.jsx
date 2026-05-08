@@ -382,7 +382,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const [cheatingCount,setCheatingCount]=useState(0);
   const [blackboard,setBlackboard]=useState(null);
   const [mouthLetter,setMouthLetter]=useState(null);
-  const [micStatus,setMicStatus]=useState("idle");
+  const [micStatus,setMicStatus]=useState("locked"); // locked until first tap
 
   const videoRef=useRef(null);
   const canvasRef=useRef(null);
@@ -614,8 +614,8 @@ function Classroom({ student, parentNotes, onBack }) {
         sid=sess.id;setSessionId(sid);
       }catch(e){}
       const briefing=parentNotes
-        ?`[PARENT BRIEFING] Parent says: "${parentNotes}". Follow this plan. Do NOT tell the child. Greet ${student.name} and announce today's lesson topic based on parent notes, then start teaching. End with "Raise your hand when you're ready!"`
-        :`[CLASS STARTING] Greet ${student.name} warmly. Choose an Islamic topic for today based on their level (${student.level}). Say "Today we are going to learn [topic]" then begin teaching immediately. End with "Raise your hand when you are ready to answer!"`;
+        ?`[PARENT BRIEFING] Parent says: "${parentNotes}". Follow this plan exactly. Do NOT ask the child what they want to learn. Do NOT ask for their name. Greet ${student.name} by name, announce exactly what you will teach today based on parent notes, then immediately start teaching. End with "Raise your hand when you are ready!"`
+        :`[CLASS STARTING] Greet ${student.name} by name. You are in charge. Do NOT ask what they want to learn. Do NOT ask questions yet. Choose a topic for today based on level (${student.level}). Say "Today we are going to learn [specific topic]" then immediately start teaching it. End your opening with "Raise your hand when you are ready to answer!"`;
       setIsThinking(true);setFaceState("thinking");
       try{
         const data=await api("POST","/noor/chat",{student_id:student.id,lesson_id:lid,message:briefing,mode:"TEACHING",history:[]});
