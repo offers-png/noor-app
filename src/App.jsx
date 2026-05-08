@@ -479,102 +479,128 @@ function Classroom({ student, parentNotes, onBack }) {
     }
   },[student,speak]);
 
-  // ── CONTINUOUS LISTEN — always on background ──────────
+  // ── CONTINUOUS LISTEN — single persistent instance ────
   const startContinuousListen=useCallback(()=>{
-    if(listeningRef.current||speakingRef.current||busyRef.current) return;
     if(micStatus==="locked") return;
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR) return;
+    if(!SR){ setCaption("Voice not supported — use Chrome"); return; }
+
+    // Kill any existing instance first
+    if(recRef.current){
+      try{ recRef.current.onend=null; recRef.current.onerror=null; recRef.current.onresult=null; recRef.current.abort(); }catch(e){}
+    }
+
     const rec=new SR();
     rec.lang="en-US";
-    rec.interimResults=false; // final only — more reliable
-    rec.continuous=false;
+    rec.interimResults=true;
+    rec.continuous=true; // KEY: one instance runs forever
     rec.maxAlternatives=1;
     recRef.current=rec;
+    let finalBuffer="";
+    let sendTimer=null;
+
+    const sendIfReady=()=>{
+      const said=finalBuffer.trim();
+      if(said.length<2) return;
+      finalBuffer="";
+      clearTimeout(sendTimer);
+      if(speakingRef.current||busyRef.current) return; // ignore if teacher speaking
+      setCaption(said);
+      saveTranscript("student",said);
+      const img=captureFrame();
+      setHandDetected(false);setWaitingForHand(false);
+      clearInterval(handRef.current);
+      askAI({text:said,imageB64:img});
+    };
 
     rec.onstart=()=>{
       listeningRef.current=true;
       setIsListening(true);
-      setFaceState(f=>f==="watching"?"listening":f);
       setMicStatus("on");
+      setFaceState(f=>speakingRef.current?f:"listening");
     };
 
     rec.onresult=e=>{
-      const said=e.results[0]?.[0]?.transcript?.trim()||"";
-      if(said&&said.length>1){
-        setCaption(said);
-        saveTranscript("student",said);
-        const img=captureFrame();
-        rec.stop();
-        setHandDetected(false);setWaitingForHand(false);
-        clearInterval(handRef.current);
-        askAI({text:said,imageB64:img});
+      if(speakingRef.current||busyRef.current) return; // teacher talking — ignore
+      let interim="";
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal){
+          finalBuffer+=e.results[i][0].transcript+" ";
+          clearTimeout(sendTimer);
+          sendTimer=setTimeout(sendIfReady,800); // wait 0.8s after final result
+        } else {
+          interim=e.results[i][0].transcript;
+        }
       }
+      if(interim&&!speakingRef.current) setCaption(interim);
     };
 
     rec.onend=()=>{
       listeningRef.current=false;
       setIsListening(false);
-      setMicStatus("idle");
-      setCaption("");
-      // Auto-restart if not busy — always listening
-      if(!speakingRef.current&&!busyRef.current){
-        setTimeout(()=>startContinuousListen(),400);
+      // Auto-restart unless teacher is speaking or we're thinking
+      if(!speakingRef.current&&!busyRef.current&&micStatus!=="locked"){
+        setTimeout(()=>startContinuousListen(),300);
       }
     };
 
     rec.onerror=e=>{
       listeningRef.current=false;
       setIsListening(false);
-      setMicStatus("error");
       if(e.error==="not-allowed"){
-        setCaption("❌ Microphone blocked — open browser settings and allow mic access");
-      } else if(e.error!=="no-speech"&&e.error!=="aborted"){
-        console.log("SR error:",e.error);
+        setMicStatus("locked");
+        setCaption("❌ Mic blocked — click 🔒 in address bar → Allow Microphone");
+        return;
       }
-      // Restart even on error
-      if(!speakingRef.current&&!busyRef.current){
-        setTimeout(()=>startContinuousListen(),800);
+      if(e.error!=="no-speech"&&e.error!=="aborted") console.log("SR:",e.error);
+      // Restart
+      if(!speakingRef.current&&!busyRef.current&&micStatus!=="locked"){
+        setTimeout(()=>startContinuousListen(),500);
       }
     };
 
-    try{rec.start();}catch(e){
+    try{ rec.start(); }
+    catch(e){
       listeningRef.current=false;
       setTimeout(()=>startContinuousListen(),1000);
     }
-  },[captureFrame,askAI,saveTranscript]);
+  },[captureFrame,askAI,saveTranscript,micStatus]);
 
   // ── Hand raise watch ───────────────────────────────────
   const startHandWatch=useCallback(()=>{
     clearInterval(handRef.current);
     let busy=false;
     handRef.current=setInterval(async()=>{
-      if(!waitingRef.current||speakingRef.current||listeningRef.current||busy) return;
+      if(!waitingRef.current||speakingRef.current||busy) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
       try{
+        // More lenient prompt — detects any upward arm/hand movement
+        const res=await fetch("https://api.anthropic.com/v1/messages",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","x-api-key":"","anthropic-version":"2023-06-01"},
+        });
+        // Use backend hand-raise endpoint
         const data=await api("POST","/noor/hand-raise",{
-          student_id:student.id,lesson_id:lessonIdRef.current,
-          session_id:sessionIdRef.current,image_b64:img
+          student_id:student.id,
+          lesson_id:lessonIdRef.current,
+          session_id:sessionIdRef.current,
+          image_b64:img
         });
         if(data.raised){
           clearInterval(handRef.current);
           setHandDetected(true);setWaitingForHand(false);
-          // Stop listening, call on student
-          recRef.current?.abort?.();
-          recRef.current?.stop?.();
+          // Pause mic
+          try{recRef.current?.abort();}catch(e){}
           listeningRef.current=false;setIsListening(false);
-          const callOn=`Yes ${student.name}! Go ahead!`;
+          const callOn=`Ahsant! Yes, ya waladi! Go ahead.`;
           setBubble(callOn+" 🎤");
-          speak(callOn,()=>{
-            // After calling on them, restart listening — their response will come through
-            setTimeout(()=>startContinuousListen(),200);
-          });
+          speak(callOn,()=>setTimeout(()=>startContinuousListen(),300));
         }
       }catch(e){}
       busy=false;
-    },1500); // check every 1.5s — more responsive
+    },1500);
   },[student,captureFrame,speak,startContinuousListen]);
 
   // ── Vision / attention ─────────────────────────────────
