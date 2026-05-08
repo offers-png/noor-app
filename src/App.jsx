@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
 const API = "https://main-backend-k32m.onrender.com";
-const ANTHROPIC = "https://api.anthropic.com/v1/messages";
 
 const api = async (method, path, body) => {
   const res = await fetch(`${API}${path}`, {
@@ -13,21 +12,7 @@ const api = async (method, path, body) => {
   return res.json();
 };
 
-// Direct Claude call from frontend
-const claude = async (messages, system, maxTokens = 300) => {
-  const res = await fetch(ANTHROPIC, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      system,
-      messages,
-    }),
-  });
-  const d = await res.json();
-  return d.content?.[0]?.text || "";
-};
+
 
 // ── Mouth Avatar ──────────────────────────────────────────
 const MOUTH_SHAPES = {
@@ -543,7 +528,7 @@ function Classroom({ student, parentNotes, onBack }) {
     if(micGranted&&!listeningRef.current&&!speakingRef.current) startListening();
   },[micGranted]);
 
-  // ── HAND RAISE — direct Claude Vision ───────────────────
+  // ── HAND RAISE — via backend ─────────────────────────────
   const startHandWatch=useCallback(()=>{
     clearInterval(handRef.current);
     let busy=false;
@@ -553,22 +538,13 @@ function Classroom({ student, parentNotes, onBack }) {
       const img=captureFrame();
       if(!img){busy=false;return;}
       try{
-        // Call Claude Vision directly — faster, no backend hop
-        const res=await fetch(ANTHROPIC,{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            model:"claude-sonnet-4-20250514",
-            max_tokens:10,
-            messages:[{role:"user",content:[
-              {type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}},
-              {type:"text",text:"Look carefully. Is any hand, arm or finger raised upward in this image? Even partial raise counts. Answer ONLY yes or no."}
-            ]}]
-          })
+        const data=await api("POST","/noor/hand-raise",{
+          student_id:student.id,
+          lesson_id:lessonIdRef.current,
+          session_id:sessionIdRef.current,
+          image_b64:img
         });
-        const d=await res.json();
-        const raised=(d.content?.[0]?.text||"").toLowerCase().includes("yes");
-        if(raised){
+        if(data.raised){
           clearInterval(handRef.current);
           setHandDetected(true);setWaitingForHand(false);
           try{recRef.current?.abort();}catch(e){}
@@ -576,15 +552,13 @@ function Classroom({ student, parentNotes, onBack }) {
           const callOn=`Ahsant! Yes, ya waladi! Go ahead.`;
           setBubble(callOn+" 🎤");
           speak(callOn,()=>setTimeout(startListening,200));
-          // Log hand raise
-          if(lessonIdRef.current) api("POST","/noor/hand-raise",{student_id:student.id,lesson_id:lessonIdRef.current,session_id:sessionIdRef.current,image_b64:img}).catch(()=>{});
         }
       }catch(e){}
       busy=false;
     },1500);
   },[captureFrame,speak,startListening,student]);
 
-  // ── VISION / EMOTION LOOP ────────────────────────────────
+  // ── VISION / EMOTION LOOP — via backend ─────────────────
   const startVision=useCallback(()=>{
     clearInterval(visionRef.current);
     let busy=false;
@@ -594,51 +568,29 @@ function Classroom({ student, parentNotes, onBack }) {
       const img=captureFrame();
       if(!img){busy=false;return;}
       try{
-        // Direct Claude Vision — detect attention AND emotion
-        const res=await fetch(ANTHROPIC,{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            model:"claude-sonnet-4-20250514",
-            max_tokens:60,
-            messages:[{role:"user",content:[
-              {type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}},
-              {type:"text",text:`Mode: ${modeRef.current}. Look at this child. 
-1. Are they paying attention or distracted/looking away?
-2. What is their emotion: confused, bored, happy, focused, absent?
-3. If RECITATION mode: are they holding or reading from a paper/book?
-Reply with JSON only: {"attention":"focused|distracted|absent","emotion":"confused|bored|happy|focused","cheating":true|false}`}
-            ]}]
-          })
+        const data=await api("POST","/noor/vision",{
+          student_id:student.id,
+          lesson_id:lessonIdRef.current,
+          session_id:sessionIdRef.current,
+          image_b64:img,
+          mode:modeRef.current,
         });
-        const d=await res.json();
-        const raw=(d.content?.[0]?.text||"").trim();
-        let parsed={};
-        try{const m=raw.match(/\{.*\}/s);if(m) parsed=JSON.parse(m[0]);}catch(e){}
-
-        const {attention,emotion,cheating}=parsed;
-        let visionMsg=null;
-
-        if(cheating&&modeRef.current==="RECITATION"){
+        if(data.event_type==="cheating"){
           setCheatingCount(p=>p+1);
           setAlertMsg("👀 Sheikh Noor sees you!");
           setTimeout(()=>setAlertMsg(""),3000);
-          visionMsg="[VISION: Child appears to be reading from a book during recitation]";
-        } else if(attention==="absent"){
-          visionMsg="[VISION: Child is not visible or has left]";
-        } else if(attention==="distracted"){
-          visionMsg="[VISION: Child is distracted and not paying attention]";
-        } else if(emotion==="confused"&&attention==="focused"){
-          visionMsg="[VISION: Child looks confused — consider re-explaining]";
-        } else if(emotion==="bored"){
-          visionMsg="[VISION: Child looks bored — try engaging differently]";
+        } else if(data.event_type==="distracted"){
+          setAlertMsg("⚠️ Pay attention!");
+          setTimeout(()=>setAlertMsg(""),3000);
         }
-
-        if(visionMsg) askAI({visionAlert:visionMsg});
+        if(data.teacher_response){
+          setBubble(data.teacher_response);
+          speak(data.teacher_response,()=>{setWaitingForHand(true);startHandWatch();});
+        }
       }catch(e){}
       busy=false;
     },8000);
-  },[captureFrame,askAI]);
+  },[captureFrame,askAI,speak,startHandWatch,student]);
 
   // ── INIT ────────────────────────────────────────────────
   useEffect(()=>{
