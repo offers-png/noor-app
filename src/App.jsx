@@ -521,6 +521,34 @@ function Classroom({ student, onBack }) {
         <Waveform active={isSpeaking}/>
       </div>
 
+      {/* Push to talk button */}
+      <button
+        onPointerDown={() => { synthRef.current.cancel(); setIsSpeaking(false); startListen(); }}
+        onPointerUp={() => { setTimeout(() => recRef.current?.stop(), 500); }}
+        disabled={isThinking}
+        style={{
+          margin:"10px 14px 0",
+          width:"calc(100% - 28px)",
+          background: isListening ? "#c0392b" : isThinking ? "rgba(255,255,255,0.1)" : "#1a7a40",
+          border:"none", borderRadius:20,
+          color:"white", padding:"18px",
+          fontSize:18, fontWeight:"bold",
+          cursor: isThinking ? "not-allowed" : "pointer",
+          opacity: isThinking ? 0.5 : 1,
+          boxShadow: isListening ? "0 0 0 8px rgba(192,57,43,0.3)" : "0 4px 20px rgba(0,0,0,0.4)",
+          animation: isListening ? "pulse 1s infinite" : "none",
+          transition:"all 0.2s",
+        }}>
+        {isListening ? "🛑 Release to Send" : isThinking ? "🤔 Thinking..." : "🎤 Hold to Speak"}
+      </button>
+      <style>{`
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 0 rgba(192,57,43,0.5); }
+          70% { box-shadow: 0 0 0 20px rgba(192,57,43,0); }
+          100% { box-shadow: 0 0 0 0 rgba(192,57,43,0); }
+        }
+      `}</style>
+
       {/* Mode buttons */}
       <div style={{ display:"flex", gap:8, padding:"10px 14px 0", width:"100%", boxSizing:"border-box" }}>
         {[["TEACHING","📚 Lesson","#1a7a40"],["RECITATION","🕌 Recite","#7d3c98"]].map(([m,l,c])=>(
