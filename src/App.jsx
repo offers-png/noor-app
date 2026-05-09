@@ -448,7 +448,7 @@ function Classroom({ student, parentNotes, onBack }) {
     }
   },[student,speak,busy]);
 
-  // ── SPEECH RECOGNITION — continuous=true ────────────────
+  // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
     if(!micGranted||listeningRef.current) return;
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -459,7 +459,8 @@ function Classroom({ student, parentNotes, onBack }) {
     }
 
     const rec=new SR();
-    rec.lang="en-US";
+    // Support both Arabic and English speech recognition
+    rec.lang="ar-SA"; // Primary: Arabic (Saudi Arabia)
     rec.continuous=true;
     rec.interimResults=true;
     rec.maxAlternatives=1;
@@ -503,7 +504,13 @@ function Classroom({ student, parentNotes, onBack }) {
     rec.onerror=e=>{
       listeningRef.current=false;setIsListening(false);
       if(e.error==="not-allowed"){setMicError("Microphone blocked. Click 🔒 in address bar → Allow Microphone → Reload.");return;}
-      if(e.error!=="no-speech"&&e.error!=="aborted") console.log("SR:",e.error);
+      if(e.error!=="no-speech"&&e.error!=="aborted") {
+        console.log("Speech Recognition Error:",e.error);
+        // Fallback to English if Arabic fails
+        if(e.error==="network"||e.error==="service-not-allowed") {
+          rec.lang="en-US";
+        }
+      }
       if(!speakingRef.current&&!thinkingRef.current&&micGranted) setTimeout(startListening,500);
     };
 
@@ -534,10 +541,11 @@ function Classroom({ student, parentNotes, onBack }) {
     if(micGranted&&!listeningRef.current&&!speakingRef.current) startListening();
   },[micGranted]);
 
-  // ── HAND RAISE — via backend ─────────────────────────────
+  // ── HAND RAISE — via backend with improved error handling ─────────────────────────────
   const startHandWatch=useCallback(()=>{
     clearInterval(handRef.current);
     let busy=false;
+    let failCount=0;
     handRef.current=setInterval(async()=>{
       if(!waitingRef.current||speakingRef.current||thinkingRef.current||busy) return;
       busy=true;
@@ -550,6 +558,7 @@ function Classroom({ student, parentNotes, onBack }) {
           session_id:sessionIdRef.current,
           image_b64:img
         });
+        failCount=0; // Reset on success
         if(data.raised){
           clearInterval(handRef.current);
           setHandDetected(true);setWaitingForHand(false);
@@ -559,15 +568,23 @@ function Classroom({ student, parentNotes, onBack }) {
           setBubble(callOn+" 🎤");
           speak(callOn,()=>setTimeout(startListening,200));
         }
-      }catch(e){}
+      }catch(e){
+        failCount++;
+        console.log("Hand detection error:",e.message,"(attempt",failCount+")");
+        // If backend is down, show user feedback
+        if(failCount>3) {
+          console.warn("Backend hand-raise endpoint not responding. Ensure backend is running.");
+        }
+      }
       busy=false;
     },1500);
   },[captureFrame,speak,startListening,student]);
 
-  // ── VISION / EMOTION LOOP — via backend ─────────────────
+  // ── VISION / EMOTION LOOP — via backend with improved error handling ─────────────────
   const startVision=useCallback(()=>{
     clearInterval(visionRef.current);
     let busy=false;
+    let failCount=0;
     visionRef.current=setInterval(async()=>{
       if(speakingRef.current||thinkingRef.current||busy) return;
       busy=true;
@@ -581,6 +598,7 @@ function Classroom({ student, parentNotes, onBack }) {
           image_b64:img,
           mode:modeRef.current,
         });
+        failCount=0; // Reset on success
         if(data.event_type==="cheating"){
           setCheatingCount(p=>p+1);
           setAlertMsg("👀 Sheikh Noor sees you!");
@@ -593,7 +611,12 @@ function Classroom({ student, parentNotes, onBack }) {
           setBubble(data.teacher_response);
           speak(data.teacher_response,()=>{setWaitingForHand(true);startHandWatch();});
         }
-      }catch(e){}
+      }catch(e){
+        failCount++;
+        if(failCount>5) {
+          console.warn("Vision endpoint not responding. Backend may be down.");
+        }
+      }
       busy=false;
     },8000);
   },[captureFrame,askAI,speak,startHandWatch,student]);
@@ -613,9 +636,10 @@ function Classroom({ student, parentNotes, onBack }) {
       }catch(e){}
 
       // Build opening message — pass parent topic explicitly
+      // Enhance scholar/sheikh behavior: authoritative, knowledgeable, patient teacher
       const topicLine=parentNotes
-        ?`[PARENT TOPIC: ${parentNotes}] — This is your ONLY topic today. Do not deviate. Greet ${student.name} by name, announce exactly this topic, then begin teaching it immediately.`
-        :`[CLASS STARTING] No topic given. Choose wisely based on ${student.name}'s level: ${student.level}. Greet by name, announce topic, begin immediately.`;
+        ?`[SCHOLAR TEACHER MODE] You are Sheikh Noor, a wise and patient Islamic scholar. Your role is to teach ${student.name} with the wisdom of a true sheikh. Parent's focus: ${parentNotes}. This is your ONLY topic today. Greet ${student.name} with respect and warmth, announce exactly this topic, then begin teaching it with deep Islamic knowledge and Quranic references. Be authoritative yet encouraging. Use Quranic verses and Islamic principles to support your teaching.`
+        :`[SCHOLAR TEACHER MODE] You are Sheikh Noor, a wise and patient Islamic scholar. Your role is to teach ${student.name} with the wisdom of a true sheikh. No specific topic given. Choose wisely based on ${student.name}'s level (${student.level}). Greet ${student.name} with respect and warmth, announce your chosen topic, then begin teaching it with deep Islamic knowledge and Quranic references. Be authoritative yet encouraging.`;
 
       setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
       try{
@@ -626,7 +650,8 @@ function Classroom({ student, parentNotes, onBack }) {
         speak(reply,()=>{setWaitingForHand(true);startHandWatch();startVision();});
       }catch(e){
         setIsThinking(false);thinkingRef.current=false;
-        const fb=`Bismillah. Assalamu Alaikum ${student.name}! Today we begin our lesson. Listen carefully, ya waladi. Raise your hand when you are ready!`;
+        // Fallback message with scholar/sheikh tone
+        const fb=`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, ${student.name}! I am Sheikh Noor, your Islamic teacher. Today we embark on a journey of knowledge and wisdom. Listen carefully, ya waladi. Raise your hand when you have a question or are ready to answer. May Allah bless your learning!`;
         setBubble(fb);speak(fb,()=>{setWaitingForHand(true);startHandWatch();startVision();});
       }
     };
