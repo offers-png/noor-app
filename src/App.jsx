@@ -397,15 +397,21 @@ function Classroom({ student, parentNotes, onBack }) {
   // ── TTS ─────────────────────────────────────────────────
   const speak=useCallback((text,onDone)=>{
     synthRef.current.cancel();
-    const clean=text.replace(/[*_#~`]/g,"").replace(/\n+/g," ").trim();
-    if(!clean){onDone?.();return;}
-    saveT("teacher",clean);
-    const board=parseBlackboard(clean);
+    // Strip Arabic script — TTS engine can't pronounce it, sounds broken
+    // Also strip any diacritics/harakat. Only speak transliteration.
+    const noArabic=text
+      .replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+/g," ")
+      .replace(/[*_#~`]/g,"")
+      .replace(/\s+/g," ")
+      .trim();
+    if(!noArabic){onDone?.();return;}
+    saveT("teacher",text); // save original with Arabic for transcript
+    const board=parseBlackboard(text);
     if(board) setBlackboard(board);
-    const letter=detectLetter(clean);
+    const letter=detectLetter(text);
     if(letter) setMouthLetter(letter); else if(!board) setMouthLetter(null);
 
-    const utt=new SpeechSynthesisUtterance(clean);
+    const utt=new SpeechSynthesisUtterance(noArabic);
     utt.rate=0.87;utt.pitch=1.1;
     const voices=synthRef.current.getVoices();
     const v=voices.find(v=>/Samantha|Karen|Zira|Serena|Google UK English Female/i.test(v.name))||voices.find(v=>v.lang.startsWith("en"))||voices[0];
@@ -636,6 +642,12 @@ function Classroom({ student, parentNotes, onBack }) {
         api("POST","/noor/lesson/end",{lesson_id:lId,student_id:student.id,topics_covered:[]}).catch(()=>{});
       }
     };
+  },[]);
+
+  // ── Keepalive — ping backend every 4 min to prevent sleep
+  useEffect(()=>{
+    const t=setInterval(()=>api("GET","/noor/ping").catch(()=>{}),240000);
+    return()=>clearInterval(t);
   },[]);
 
   const doHomework=async()=>{
