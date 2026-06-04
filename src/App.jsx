@@ -372,6 +372,12 @@ function Classroom({ student, parentNotes, onBack }) {
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
     turn: 0,
+    step: 1,
+    energy: "settling",
+    attention: "unknown",
+    participation: "new session",
+    recentMistake: "",
+    lastTeacherMove: "opening the class",
     lastTeacherPoint: "",
     lastStudentInput: "",
   });
@@ -404,12 +410,40 @@ function Classroom({ student, parentNotes, onBack }) {
     const state=lessonStateRef.current;
     const intent=visionAlert ? "camera/attention event" : homeworkScan ? "homework scan" : classifyStudentText(rawText);
     return [
-      `[CLASSROOM STATE: topic="${state.topic}", phase="${state.phase}", turn=${state.turn}, last_teacher_point="${state.lastTeacherPoint}", last_student_input="${state.lastStudentInput}"]`,
+      `[REAL CLASSROOM BRIEF]`,
+      `Student: ${student.name}${student.age ? `, age ${student.age}` : ""}.`,
+      `Mode: ${modeRef.current}. Topic: ${state.topic}. Lesson step: ${state.step}. Phase: ${state.phase}. Turn: ${state.turn}.`,
+      `Student state: energy=${state.energy}; attention=${state.attention}; participation=${state.participation}.`,
+      `Recent mistake/confusion: ${state.recentMistake || "none noted"}.`,
+      `Last teacher move: ${state.lastTeacherMove}.`,
+      `Last teacher point: ${state.lastTeacherPoint || "none yet"}.`,
+      `Last student input: ${state.lastStudentInput || "none yet"}.`,
       `[EVENT TYPE: ${intent}]`,
-      `[TEACHER ACTION: If this is an interruption, pause and answer it. If the child asks an on-topic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is silence, re-engage the child with one simple prompt. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
+      `[TEACHER ACTION: Act like the live teacher in charge. First respond to this exact event. Then do one teacher move only: explain, model, correct, praise, redirect, ask, or advance. If this is an interruption, pause and answer it. If the child asks an on-topic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is silence, re-engage the child with one simple prompt. If it is distraction, redirect. Continue from the last_teacher_point. Do not restart. Do not repeat the same item unless the child asked to repeat.]`,
       rawText || "",
     ].join("\n");
-  },[classifyStudentText]);
+  },[classifyStudentText,student]);
+
+  const updateTeacherMemory=useCallback((intent, rawText, reply)=>{
+    const current=lessonStateRef.current;
+    const lower=`${rawText} ${reply}`.toLowerCase();
+    const needsHelp=/confused|don't understand|dont understand|wrong|mistake|again|repeat|try/.test(lower);
+    const answered=/ahsant|mashallah|correct|good|excellent|yes/.test(lower);
+    const shouldAdvance=/next|move forward|now we go|after this/.test(lower)||answered;
+    lessonStateRef.current={
+      ...current,
+      turn: current.turn+1,
+      step: shouldAdvance ? current.step+1 : current.step,
+      phase: intent==="student silence" ? "re-engaging" : intent.includes("question") ? "answering question" : modeRef.current==="RECITATION" ? "recitation coaching" : shouldAdvance ? "advancing" : "guided practice",
+      energy: intent==="student silence" ? "quiet" : "engaged",
+      attention: intent==="camera/attention event" ? "needs redirect" : "present",
+      participation: intent.includes("question") ? "asking questions" : needsHelp ? "needs support" : answered ? "responding well" : "participating",
+      recentMistake: needsHelp ? rawText.slice(0,120) : current.recentMistake,
+      lastTeacherMove: intent==="student silence" ? "re-engaged after silence" : shouldAdvance ? "advanced one step" : needsHelp ? "corrected or explained" : "continued guided teaching",
+      lastTeacherPoint: reply.slice(0,220),
+      lastStudentInput: rawText.slice(0,160),
+    };
+  },[]);
 
   const stopClassroom=useCallback(()=>{
     clearInterval(visionRef.current);
@@ -556,13 +590,7 @@ function Classroom({ student, parentNotes, onBack }) {
       });
       const reply=data.reply;
       historyRef.current=[...historyRef.current,{role:"user",content:msg},{role:"assistant",content:reply}].slice(-18);
-      lessonStateRef.current={
-        ...lessonStateRef.current,
-        phase: visionAlert ? "attention redirect" : modeRef.current==="RECITATION" ? "recitation practice" : "active teaching",
-        turn: lessonStateRef.current.turn+1,
-        lastTeacherPoint: reply.slice(0,180),
-        lastStudentInput: rawText.slice(0,120),
-      };
+      updateTeacherMemory(intent,rawText,reply);
       setIsThinking(false);thinkingRef.current=false;setBubble(reply);
       speak(reply,()=>{
         setWaitingForHand(true);
@@ -572,7 +600,7 @@ function Classroom({ student, parentNotes, onBack }) {
       setIsThinking(false);thinkingRef.current=false;setFaceState("watching");
       if(!visionAlert) speak("Ya waladi, let me try again.",()=>{setWaitingForHand(true);startHandWatch();});
     }
-  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom]);
+  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom,updateTeacherMemory]);
 
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
@@ -819,15 +847,15 @@ function Classroom({ student, parentNotes, onBack }) {
       // Build opening message — pass parent topic explicitly
       // Enhance scholar/sheikh behavior: authoritative, knowledgeable, patient teacher
       const topicLine=parentNotes
-        ?`[PARENT TOPIC: ${parentNotes}] [CLASSROOM STATE: opening lesson for ${student.name}, level ${student.level}] Start with a warm hook, teach only the first small step, then check understanding. Do not cover the whole lesson at once.`
-        :`[CLASSROOM STATE: opening lesson for ${student.name}, level ${student.level}] Choose a suitable Islamic topic, start with a warm hook, teach only the first small step, then check understanding. Do not cover the whole lesson at once.`;
+        ?`[PARENT TOPIC: ${parentNotes}] [REAL CLASSROOM OPENING: student=${student.name}, level=${student.level}] Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask the child to do one small action. Do not cover the whole lesson.`
+        :`[REAL CLASSROOM OPENING: student=${student.name}, level=${student.level}] Choose a suitable Islamic topic. Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask the child to do one small action. Do not cover the whole lesson.`;
 
       setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
       try{
         const data=await api("POST","/noor/chat",{student_id:student.id,lesson_id:lid,message:topicLine,mode:"TEACHING",history:[]});
         const reply=data.reply;
         historyRef.current=[{role:"user",content:"[CLASS STARTING]"},{role:"assistant",content:reply}];
-        lessonStateRef.current={...lessonStateRef.current,phase:"active teaching",lastTeacherPoint:reply.slice(0,180)};
+        lessonStateRef.current={...lessonStateRef.current,phase:"guided practice",lastTeacherMove:"opened lesson with first task",lastTeacherPoint:reply.slice(0,220)};
         setIsThinking(false);thinkingRef.current=false;setBubble(reply);
         speak(reply,()=>{setWaitingForHand(true);startHandWatch();startVision();startListening();});
       }catch(e){
