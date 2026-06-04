@@ -116,6 +116,87 @@ function Blackboard({ content }) {
   );
 }
 
+function WritingPad({ prompt, onSubmit, onClose }) {
+  const padRef = useRef(null);
+  const drawingRef = useRef(false);
+
+  const setup = useCallback(() => {
+    const c = padRef.current;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
+    const scale = window.devicePixelRatio || 1;
+    c.width = Math.max(1, Math.floor(rect.width * scale));
+    c.height = Math.max(1, Math.floor(rect.height * scale));
+    const ctx = c.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = "#f8f1dc";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.strokeStyle = "rgba(13,40,24,0.13)";
+    ctx.lineWidth = 1;
+    for (let x = 24; x < rect.width; x += 24) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, rect.height); ctx.stroke(); }
+    for (let y = 24; y < rect.height; y += 24) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(rect.width, y); ctx.stroke(); }
+    if (prompt?.letter) {
+      ctx.font = `${Math.min(rect.height * 0.58, 150)}px serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(26,122,64,0.16)";
+      ctx.fillText(prompt.letter, rect.width / 2, rect.height / 2);
+    }
+  }, [prompt]);
+
+  useEffect(() => { setup(); }, [setup]);
+
+  const point = e => {
+    const c = padRef.current, rect = c.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const begin = e => {
+    e.preventDefault();
+    const c = padRef.current, ctx = c.getContext("2d"), p = point(e);
+    drawingRef.current = true;
+    ctx.strokeStyle = "#0d2818";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  };
+  const move = e => {
+    if (!drawingRef.current) return;
+    e.preventDefault();
+    const ctx = padRef.current.getContext("2d"), p = point(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  };
+  const end = e => { e.preventDefault(); drawingRef.current = false; };
+  const submit = () => {
+    const b64 = padRef.current.toDataURL("image/jpeg", 0.82).split(",")[1];
+    onSubmit(b64);
+  };
+
+  return (
+    <div style={{margin:"6px 14px 0",width:"calc(100% - 28px)",background:"#16351f",border:"2px solid rgba(240,192,64,0.55)",borderRadius:14,padding:10,boxSizing:"border-box"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
+        <div style={{fontSize:13,color:"#f0c060",fontWeight:"bold"}}>Write: {prompt?.label || "practice"}</div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={setup} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"white",borderRadius:8,padding:"6px 9px",fontSize:12}}>Clear</button>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.18)",color:"white",borderRadius:8,padding:"6px 9px",fontSize:12}}>Hide</button>
+          <button onClick={submit} style={{background:"#1a7a40",border:"none",color:"white",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:"bold"}}>Done</button>
+        </div>
+      </div>
+      <canvas
+        ref={padRef}
+        onPointerDown={begin}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        onPointerLeave={end}
+        style={{width:"100%",height:190,borderRadius:10,display:"block",touchAction:"none",boxShadow:"inset 0 2px 10px rgba(0,0,0,0.25)",background:"#f8f1dc"}}
+      />
+    </div>
+  );
+}
+
 function parseBlackboard(text) {
   const lower = text.toLowerCase();
   if (lower.includes("al-fatiha")||lower.includes("fatiha")) return {title:"Surah Al-Fatiha",type:"ayah",lines:[
@@ -153,6 +234,14 @@ function detectLetter(text) {
     if (lower.includes(k) && MOUTH_SHAPES[l]) return {...MOUTH_SHAPES[l], letter:l};
   }
   return null;
+}
+
+function detectWritingPrompt(text, letterData) {
+  const lower = text.toLowerCase();
+  if (!/(write|trace|draw|finger|show me|copy|practice writing)/.test(lower)) return null;
+  const letter = letterData?.letter || (lower.includes("alif") || lower.includes("alef") ? "أ" : lower.includes("ba") || lower.includes("baa") ? "ب" : "");
+  const label = letterData?.label || (letter ? `${letter} practice` : "letter practice");
+  return { letter, label };
 }
 
 // ── Face ───────────────────────────────────────────────────
@@ -335,6 +424,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const [handDetected,setHandDetected]=useState(false);
   const [blackboard,setBlackboard]=useState(null);
   const [mouthLetter,setMouthLetter]=useState(null);
+  const [writingPrompt,setWritingPrompt]=useState(null);
   const [lessonId,setLessonId]=useState(null);
   const [sessionId,setSessionId]=useState(null);
   const [cheatingCount,setCheatingCount]=useState(0);
@@ -520,6 +610,8 @@ function Classroom({ student, parentNotes, onBack }) {
     if(board) setBlackboard(board);
     const letter=detectLetter(text);
     if(letter) setMouthLetter(letter); else if(!board) setMouthLetter(null);
+    const writing=detectWritingPrompt(text,letter);
+    if(writing) setWritingPrompt(writing);
 
     const utt=new SpeechSynthesisUtterance(noArabic);
     utt.rate=0.78;utt.pitch=0.78;
@@ -945,6 +1037,18 @@ function Classroom({ student, parentNotes, onBack }) {
           {blackboard&&<Blackboard content={blackboard}/>}
           {mouthLetter&&<MouthAvatar letterData={mouthLetter} speaking={isSpeaking}/>}
         </div>
+      )}
+
+      {writingPrompt&&(
+        <WritingPad
+          prompt={writingPrompt}
+          onClose={()=>setWritingPrompt(null)}
+          onSubmit={img=>{
+            const label=writingPrompt.label||"the letter";
+            setWritingPrompt(null);
+            askAI({text:`[WRITING PRACTICE: The child wrote ${label} on the touchscreen. Look at the drawing. Praise what is correct, give one specific correction if needed, then continue the lesson without restarting.]`,imageB64:img});
+          }}
+        />
       )}
 
       {/* Bubble */}
