@@ -364,6 +364,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const lastHandRaiseRef=useRef(0);
   const lastAttentionRef=useRef(0);
   const lastTranscriptRef=useRef("");
+  const lastStudentSpeechAtRef=useRef(0);
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -388,6 +389,7 @@ function Classroom({ student, parentNotes, onBack }) {
     if(/\b(back|go back|end class|stop class|stop lesson|exit|quit)\b/.test(lower)) return "navigation command";
     if(/excuse me|teacher|question|can i ask|i have a question|wait|hold on/.test(lower)) return "student interruption or question";
     if(/what('s| is) the lesson|what are we learning|what lesson today|where are we/.test(lower)) return "student asks current lesson";
+    if(/first letter|arabic letter|letter in arabic|alif|aleef|alef|ba\b|baa\b/.test(lower)) return "on-topic Arabic lesson question";
     if(/don't understand|dont understand|confused|what does|what is|why|how/.test(lower)) return "student needs explanation";
     if(/repeat|again|say it again|one more/.test(lower)) return "student needs a repeat";
     if(modeRef.current==="RECITATION") return "recitation or pronunciation attempt";
@@ -400,7 +402,7 @@ function Classroom({ student, parentNotes, onBack }) {
     return [
       `[CLASSROOM STATE: topic="${state.topic}", phase="${state.phase}", turn=${state.turn}, last_teacher_point="${state.lastTeacherPoint}", last_student_input="${state.lastStudentInput}"]`,
       `[EVENT TYPE: ${intent}]`,
-      `[TEACHER ACTION: If this is an interruption, pause and answer it. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
+      `[TEACHER ACTION: If this is an interruption, pause and answer it. If the child asks an Arabic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
       rawText || "",
     ].join("\n");
   },[classifyStudentText]);
@@ -546,6 +548,7 @@ function Classroom({ student, parentNotes, onBack }) {
               const tooSimilar=said&&said.toLowerCase()===lastTranscriptRef.current.toLowerCase();
               if(said.length>2&&!tooSimilar){
                 lastTranscriptRef.current=said;
+                lastStudentSpeechAtRef.current=Date.now();
                 setCaption(said);
                 saveT("student",said);
                 setHandDetected(false);setWaitingForHand(false);
@@ -727,6 +730,7 @@ function Classroom({ student, parentNotes, onBack }) {
         }
         if(data.teacher_response){
           const now=Date.now();
+          if(speakingRef.current||now-lastStudentSpeechAtRef.current<15000){busy=false;return;}
           if(now-lastAttentionRef.current<12000){busy=false;return;}
           lastAttentionRef.current=now;
           setBubble(data.teacher_response);
