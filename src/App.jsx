@@ -365,6 +365,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const lastHandRaiseRef=useRef(0);
   const lastAttentionRef=useRef(0);
   const lastTranscriptRef=useRef("");
+  const backendSttRef=useRef(true);
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -539,7 +540,7 @@ function Classroom({ student, parentNotes, onBack }) {
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
     if(!micGranted||listeningRef.current) return;
-    if(window.MediaRecorder&&micStreamRef.current){
+    if(backendSttRef.current&&window.MediaRecorder&&micStreamRef.current){
       if(speakingRef.current||thinkingRef.current) return;
       const chunks=[];
       const mime=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"audio/webm";
@@ -570,7 +571,12 @@ function Classroom({ student, parentNotes, onBack }) {
               }
             }catch(e){
               console.log("Audio transcription error:",e.message);
-              setMicError("I had trouble hearing that. Please try again.");
+              if(String(e.message).includes("OPENAI_API_KEY")){
+                backendSttRef.current=false;
+                setMicError("Backend transcription is not configured. Using browser speech recognition for now.");
+              } else {
+                setMicError("I had trouble hearing that. Please try again.");
+              }
             }
           }
           if(!speakingRef.current&&!thinkingRef.current&&micGranted) setTimeout(startListening,250);
