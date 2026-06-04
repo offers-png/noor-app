@@ -360,6 +360,14 @@ function Classroom({ student, parentNotes, onBack }) {
   const finalBufferRef=useRef("");
   const sendTimerRef=useRef(null);
   const lastHandRaiseRef=useRef(0);
+  const lastAttentionRef=useRef(0);
+  const lessonStateRef=useRef({
+    topic: parentNotes || "teacher-selected Islamic lesson",
+    phase: "opening",
+    turn: 0,
+    lastTeacherPoint: "",
+    lastStudentInput: "",
+  });
 
   useEffect(()=>{modeRef.current=mode;},[mode]);
   useEffect(()=>{lessonIdRef.current=lessonId;},[lessonId]);
@@ -371,6 +379,26 @@ function Classroom({ student, parentNotes, onBack }) {
   useEffect(()=>{listeningRef.current=isListening;},[isListening]);
 
   const busy=useCallback(()=>speakingRef.current||thinkingRef.current,[]);
+
+  const classifyStudentText=useCallback((text="")=>{
+    const lower=text.toLowerCase();
+    if(/excuse me|teacher|question|can i ask|i have a question|wait|hold on/.test(lower)) return "student interruption or question";
+    if(/don't understand|dont understand|confused|what does|what is|why|how/.test(lower)) return "student needs explanation";
+    if(/repeat|again|say it again|one more/.test(lower)) return "student needs a repeat";
+    if(modeRef.current==="RECITATION") return "recitation or pronunciation attempt";
+    return "student answer or comment";
+  },[]);
+
+  const classroomMessage=useCallback((rawText,{visionAlert=false,homeworkScan=false}={})=>{
+    const state=lessonStateRef.current;
+    const intent=visionAlert ? "camera/attention event" : homeworkScan ? "homework scan" : classifyStudentText(rawText);
+    return [
+      `[CLASSROOM STATE: topic="${state.topic}", phase="${state.phase}", turn=${state.turn}, last_teacher_point="${state.lastTeacherPoint}", last_student_input="${state.lastStudentInput}"]`,
+      `[EVENT TYPE: ${intent}]`,
+      `[TEACHER ACTION: If this is an interruption, pause and answer it. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
+      rawText || "",
+    ].join("\n");
+  },[classifyStudentText]);
 
   // ── Camera ──────────────────────────────────────────────
   const startCamera=useCallback(async(facing="user")=>{
@@ -425,11 +453,19 @@ function Classroom({ student, parentNotes, onBack }) {
 
   // ── AI ───────────────────────────────────────────────────
   const askAI=useCallback(async({text,imageB64,visionAlert,homeworkScan})=>{
-    if(busy()&&!visionAlert) return;
+    const rawText=text||"";
+    const intent=classifyStudentText(rawText);
+    const canInterruptSpeaking=speakingRef.current&&/interruption|question|explanation|repeat/.test(intent);
+    if(thinkingRef.current||(!canInterruptSpeaking&&busy()&&!visionAlert)) return;
+    if(canInterruptSpeaking){
+      synthRef.current.cancel();
+      setIsSpeaking(false);speakingRef.current=false;
+    }
     setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
-    let msg=text||"";
+    let msg=rawText;
     if(visionAlert) msg=`[VISION: ${visionAlert}]`;
     if(homeworkScan) msg="[HOMEWORK SCAN] Read and grade this homework carefully.";
+    msg=classroomMessage(msg,{visionAlert,homeworkScan});
     try{
       const data=await api("POST","/noor/chat",{
         student_id:student.id,lesson_id:lessonIdRef.current,
@@ -438,6 +474,13 @@ function Classroom({ student, parentNotes, onBack }) {
       });
       const reply=data.reply;
       historyRef.current=[...historyRef.current,{role:"user",content:msg},{role:"assistant",content:reply}].slice(-18);
+      lessonStateRef.current={
+        ...lessonStateRef.current,
+        phase: visionAlert ? "attention redirect" : modeRef.current==="RECITATION" ? "recitation practice" : "active teaching",
+        turn: lessonStateRef.current.turn+1,
+        lastTeacherPoint: reply.slice(0,180),
+        lastStudentInput: rawText.slice(0,120),
+      };
       setIsThinking(false);thinkingRef.current=false;setBubble(reply);
       speak(reply,()=>{
         setWaitingForHand(true);
@@ -447,7 +490,7 @@ function Classroom({ student, parentNotes, onBack }) {
       setIsThinking(false);thinkingRef.current=false;setFaceState("watching");
       if(!visionAlert) speak("Ya waladi, let me try again.",()=>{setWaitingForHand(true);startHandWatch();});
     }
-  },[student,speak,busy]);
+  },[student,speak,busy,classifyStudentText,classroomMessage]);
 
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
@@ -483,7 +526,6 @@ function Classroom({ student, parentNotes, onBack }) {
               setCaption(said);
               saveT("student",said);
               setHandDetected(false);setWaitingForHand(false);
-              clearInterval(handRef.current);
               const img=captureFrame();
               askAI({text:said,imageB64:img});
             }
@@ -546,7 +588,7 @@ function Classroom({ student, parentNotes, onBack }) {
     let busy=false;
     let failCount=0;
     handRef.current=setInterval(async()=>{
-      if(speakingRef.current||thinkingRef.current||busy) return;
+      if(thinkingRef.current||busy) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
@@ -588,7 +630,7 @@ function Classroom({ student, parentNotes, onBack }) {
     let busy=false;
     let failCount=0;
     visionRef.current=setInterval(async()=>{
-      if(speakingRef.current||thinkingRef.current||busy) return;
+      if(thinkingRef.current||busy) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
@@ -610,6 +652,9 @@ function Classroom({ student, parentNotes, onBack }) {
           setTimeout(()=>setAlertMsg(""),3000);
         }
         if(data.teacher_response){
+          const now=Date.now();
+          if(now-lastAttentionRef.current<12000){busy=false;return;}
+          lastAttentionRef.current=now;
           setBubble(data.teacher_response);
           speak(data.teacher_response,()=>{setWaitingForHand(true);startHandWatch();});
         }
@@ -641,21 +686,22 @@ function Classroom({ student, parentNotes, onBack }) {
       // Build opening message — pass parent topic explicitly
       // Enhance scholar/sheikh behavior: authoritative, knowledgeable, patient teacher
       const topicLine=parentNotes
-        ?`[SCHOLAR TEACHER MODE] You are Sheikh Noor, a wise and patient Islamic scholar. Your role is to teach ${student.name} with the wisdom of a true sheikh. Parent's focus: ${parentNotes}. This is your ONLY topic today. Greet ${student.name} with respect and warmth, announce exactly this topic, then begin teaching it with deep Islamic knowledge and Quranic references. Be authoritative yet encouraging. Use Quranic verses and Islamic principles to support your teaching.`
-        :`[SCHOLAR TEACHER MODE] You are Sheikh Noor, a wise and patient Islamic scholar. Your role is to teach ${student.name} with the wisdom of a true sheikh. No specific topic given. Choose wisely based on ${student.name}'s level (${student.level}). Greet ${student.name} with respect and warmth, announce your chosen topic, then begin teaching it with deep Islamic knowledge and Quranic references. Be authoritative yet encouraging.`;
+        ?`[PARENT TOPIC: ${parentNotes}] [CLASSROOM STATE: opening lesson for ${student.name}, level ${student.level}] Start with a warm hook, teach only the first small step, then check understanding. Do not cover the whole lesson at once.`
+        :`[CLASSROOM STATE: opening lesson for ${student.name}, level ${student.level}] Choose a suitable Islamic topic, start with a warm hook, teach only the first small step, then check understanding. Do not cover the whole lesson at once.`;
 
       setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
       try{
         const data=await api("POST","/noor/chat",{student_id:student.id,lesson_id:lid,message:topicLine,mode:"TEACHING",history:[]});
         const reply=data.reply;
         historyRef.current=[{role:"user",content:"[CLASS STARTING]"},{role:"assistant",content:reply}];
+        lessonStateRef.current={...lessonStateRef.current,phase:"active teaching",lastTeacherPoint:reply.slice(0,180)};
         setIsThinking(false);thinkingRef.current=false;setBubble(reply);
-        speak(reply,()=>{setWaitingForHand(true);startHandWatch();startVision();});
+        speak(reply,()=>{setWaitingForHand(true);startHandWatch();startVision();startListening();});
       }catch(e){
         setIsThinking(false);thinkingRef.current=false;
         // Fallback message with scholar/sheikh tone
         const fb=`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, ${student.name}! I am Sheikh Noor, your Islamic teacher. Today we embark on a journey of knowledge and wisdom. Listen carefully, ya waladi. Raise your hand when you have a question or are ready to answer. May Allah bless your learning!`;
-        setBubble(fb);speak(fb,()=>{setWaitingForHand(true);startHandWatch();startVision();});
+        setBubble(fb);speak(fb,()=>{setWaitingForHand(true);startHandWatch();startVision();startListening();});
       }
     };
     init();
