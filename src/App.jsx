@@ -488,9 +488,12 @@ function Classroom({ student, parentNotes, onBack }) {
     if(letter) setMouthLetter(letter); else if(!board) setMouthLetter(null);
 
     const utt=new SpeechSynthesisUtterance(noArabic);
-    utt.rate=0.87;utt.pitch=1.1;
+    utt.rate=0.78;utt.pitch=0.78;
     const voices=synthRef.current.getVoices();
-    const v=voices.find(v=>/Samantha|Karen|Zira|Serena|Google UK English Female/i.test(v.name))||voices.find(v=>v.lang.startsWith("en"))||voices[0];
+    const v=voices.find(v=>/Microsoft (David|Mark|George|Ryan|Adam)|Google UK English Male|Google US English Male|en-.*male|Arabic.*Male|ar-.*male/i.test(`${v.name} ${v.lang}`))
+      ||voices.find(v=>/David|Mark|George|Ryan|Adam|Male/i.test(v.name))
+      ||voices.find(v=>v.lang.startsWith("en"))
+      ||voices[0];
     if(v) utt.voice=v;
     const stopInterruptWatch=()=>{try{interruptRecRef.current?.abort();}catch(e){} interruptRecRef.current=null;};
     const startInterruptWatch=()=>{
