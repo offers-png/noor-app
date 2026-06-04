@@ -347,6 +347,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const micStreamRef=useRef(null);
   const synthRef=useRef(window.speechSynthesis);
   const recRef=useRef(null);
+  const interruptRecRef=useRef(null);
   const mediaRecRef=useRef(null);
   const historyRef=useRef([]);
   const visionRef=useRef(null);
@@ -366,6 +367,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const lastAttentionRef=useRef(0);
   const lastTranscriptRef=useRef("");
   const backendSttRef=useRef(true);
+  const lastInterruptAtRef=useRef(0);
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -416,6 +418,7 @@ function Classroom({ student, parentNotes, onBack }) {
     clearTimeout(silenceTimerRef.current);
     synthRef.current.cancel();
     try{recRef.current?.abort();}catch(e){}
+    try{interruptRecRef.current?.abort();}catch(e){}
     try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
     listeningRef.current=false;
     speakingRef.current=false;
@@ -467,6 +470,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const speak=useCallback((text,onDone)=>{
     clearTimeout(silenceTimerRef.current);
     try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
+    try{interruptRecRef.current?.abort();}catch(e){}
     listeningRef.current=false;setIsListening(false);
     synthRef.current.cancel();
     // Strip Arabic script — TTS engine can't pronounce it, sounds broken
@@ -488,9 +492,39 @@ function Classroom({ student, parentNotes, onBack }) {
     const voices=synthRef.current.getVoices();
     const v=voices.find(v=>/Samantha|Karen|Zira|Serena|Google UK English Female/i.test(v.name))||voices.find(v=>v.lang.startsWith("en"))||voices[0];
     if(v) utt.voice=v;
-    utt.onstart=()=>{setIsSpeaking(true);speakingRef.current=true;setFaceState("speaking");};
-    utt.onend=()=>{setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
-    utt.onerror=()=>{setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
+    const stopInterruptWatch=()=>{try{interruptRecRef.current?.abort();}catch(e){} interruptRecRef.current=null;};
+    const startInterruptWatch=()=>{
+      if(!micGranted) return;
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(!SR) return;
+      const rec=new SR();
+      interruptRecRef.current=rec;
+      rec.lang="en-US";
+      rec.continuous=true;
+      rec.interimResults=true;
+      rec.onresult=e=>{
+        let heard="";
+        for(let i=e.resultIndex;i<e.results.length;i++) heard+=" "+e.results[i][0].transcript;
+        const lower=heard.toLowerCase();
+        if(/excuse me|i have a question|can i ask|question|wait|hold on/.test(lower)){
+          const now=Date.now();
+          if(now-lastInterruptAtRef.current<5000) return;
+          lastInterruptAtRef.current=now;
+          stopInterruptWatch();
+          synthRef.current.cancel();
+          setCaption(heard.trim());
+          setBubble("Yes, ya waladi, I am listening.");
+          setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");
+          setWaitingForHand(false);
+        }
+      };
+      rec.onerror=()=>{};
+      rec.onend=()=>{interruptRecRef.current=null;};
+      try{rec.start();}catch(e){}
+    };
+    utt.onstart=()=>{setIsSpeaking(true);speakingRef.current=true;setFaceState("speaking");startInterruptWatch();};
+    utt.onend=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
+    utt.onerror=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
     synthRef.current.speak(utt);
   },[saveT,micGranted,resetSilenceTimer]);
 
@@ -806,6 +840,7 @@ function Classroom({ student, parentNotes, onBack }) {
       clearTimeout(silenceTimerRef.current);
       synthRef.current.cancel();
       try{recRef.current?.abort();}catch(e){}
+      try{interruptRecRef.current?.abort();}catch(e){}
       try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
       camStreamRef.current?.getTracks().forEach(t=>t.stop());
       micStreamRef.current?.getTracks().forEach(t=>t.stop());
