@@ -361,10 +361,10 @@ function Classroom({ student, parentNotes, onBack }) {
   const listeningRef=useRef(false);
   const finalBufferRef=useRef("");
   const sendTimerRef=useRef(null);
+  const silenceTimerRef=useRef(null);
   const lastHandRaiseRef=useRef(0);
   const lastAttentionRef=useRef(0);
   const lastTranscriptRef=useRef("");
-  const lastStudentSpeechAtRef=useRef(0);
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -386,10 +386,11 @@ function Classroom({ student, parentNotes, onBack }) {
 
   const classifyStudentText=useCallback((text="")=>{
     const lower=text.toLowerCase();
+    if(lower.includes("[silence:")) return "student silence";
     if(/\b(back|go back|end class|stop class|stop lesson|exit|quit)\b/.test(lower)) return "navigation command";
     if(/excuse me|teacher|question|can i ask|i have a question|wait|hold on/.test(lower)) return "student interruption or question";
     if(/what('s| is) the lesson|what are we learning|what lesson today|where are we/.test(lower)) return "student asks current lesson";
-    if(/first letter|arabic letter|letter in arabic|alif|aleef|alef|ba\b|baa\b/.test(lower)) return "on-topic Arabic lesson question";
+    if(/letter|arabic|quran|surah|ayah|dua|tajweed|islam|muslim|prophet|salah|wudu/.test(lower)) return "on-topic lesson question";
     if(/don't understand|dont understand|confused|what does|what is|why|how/.test(lower)) return "student needs explanation";
     if(/repeat|again|say it again|one more/.test(lower)) return "student needs a repeat";
     if(modeRef.current==="RECITATION") return "recitation or pronunciation attempt";
@@ -402,7 +403,7 @@ function Classroom({ student, parentNotes, onBack }) {
     return [
       `[CLASSROOM STATE: topic="${state.topic}", phase="${state.phase}", turn=${state.turn}, last_teacher_point="${state.lastTeacherPoint}", last_student_input="${state.lastStudentInput}"]`,
       `[EVENT TYPE: ${intent}]`,
-      `[TEACHER ACTION: If this is an interruption, pause and answer it. If the child asks an Arabic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
+      `[TEACHER ACTION: If this is an interruption, pause and answer it. If the child asks an on-topic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is silence, re-engage the child with one simple prompt. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
       rawText || "",
     ].join("\n");
   },[classifyStudentText]);
@@ -411,6 +412,7 @@ function Classroom({ student, parentNotes, onBack }) {
     clearInterval(visionRef.current);
     clearInterval(handRef.current);
     clearTimeout(sendTimerRef.current);
+    clearTimeout(silenceTimerRef.current);
     synthRef.current.cancel();
     try{recRef.current?.abort();}catch(e){}
     try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
@@ -421,6 +423,14 @@ function Classroom({ student, parentNotes, onBack }) {
     micStreamRef.current?.getTracks().forEach(t=>t.stop());
     onBack();
   },[onBack]);
+
+  const resetSilenceTimer=useCallback(()=>{
+    clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current=setTimeout(()=>{
+      if(speakingRef.current||thinkingRef.current||!micGranted) return;
+      askAI({text:"[SILENCE: The child has not answered for 45 seconds. Re-engage them gently, remind them of the current lesson point, and ask one simple question. Do not restart the lesson.]"});
+    },45000);
+  },[micGranted]);
 
   // ── Camera ──────────────────────────────────────────────
   const startCamera=useCallback(async(facing="user")=>{
@@ -454,6 +464,7 @@ function Classroom({ student, parentNotes, onBack }) {
 
   // ── TTS ─────────────────────────────────────────────────
   const speak=useCallback((text,onDone)=>{
+    clearTimeout(silenceTimerRef.current);
     try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
     listeningRef.current=false;setIsListening(false);
     synthRef.current.cancel();
@@ -477,16 +488,17 @@ function Classroom({ student, parentNotes, onBack }) {
     const v=voices.find(v=>/Samantha|Karen|Zira|Serena|Google UK English Female/i.test(v.name))||voices.find(v=>v.lang.startsWith("en"))||voices[0];
     if(v) utt.voice=v;
     utt.onstart=()=>{setIsSpeaking(true);speakingRef.current=true;setFaceState("speaking");};
-    utt.onend=()=>{setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();};
-    utt.onerror=()=>{setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();};
+    utt.onend=()=>{setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
+    utt.onerror=()=>{setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
     synthRef.current.speak(utt);
-  },[saveT]);
+  },[saveT,micGranted,resetSilenceTimer]);
 
   // ── AI ───────────────────────────────────────────────────
   const askAI=useCallback(async({text,imageB64,visionAlert,homeworkScan})=>{
     const rawText=text||"";
     const intent=classifyStudentText(rawText);
     if(intent==="navigation command"){stopClassroom();return;}
+    clearTimeout(silenceTimerRef.current);
     const canInterruptSpeaking=speakingRef.current&&/interruption|question|explanation|repeat/.test(intent);
     if(thinkingRef.current||(!canInterruptSpeaking&&busy()&&!visionAlert)) return;
     if(canInterruptSpeaking){
@@ -548,7 +560,7 @@ function Classroom({ student, parentNotes, onBack }) {
               const tooSimilar=said&&said.toLowerCase()===lastTranscriptRef.current.toLowerCase();
               if(said.length>2&&!tooSimilar){
                 lastTranscriptRef.current=said;
-                lastStudentSpeechAtRef.current=Date.now();
+                clearTimeout(silenceTimerRef.current);
                 setCaption(said);
                 saveT("student",said);
                 setHandDetected(false);setWaitingForHand(false);
@@ -730,7 +742,7 @@ function Classroom({ student, parentNotes, onBack }) {
         }
         if(data.teacher_response){
           const now=Date.now();
-          if(speakingRef.current||now-lastStudentSpeechAtRef.current<15000){busy=false;return;}
+          if(speakingRef.current){busy=false;return;}
           if(now-lastAttentionRef.current<12000){busy=false;return;}
           lastAttentionRef.current=now;
           setBubble(data.teacher_response);
@@ -785,6 +797,7 @@ function Classroom({ student, parentNotes, onBack }) {
     init();
     return()=>{
       clearInterval(visionRef.current);clearInterval(handRef.current);clearTimeout(sendTimerRef.current);
+      clearTimeout(silenceTimerRef.current);
       synthRef.current.cancel();
       try{recRef.current?.abort();}catch(e){}
       try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
