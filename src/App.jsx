@@ -359,6 +359,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const listeningRef=useRef(false);
   const finalBufferRef=useRef("");
   const sendTimerRef=useRef(null);
+  const lastHandRaiseRef=useRef(0);
 
   useEffect(()=>{modeRef.current=mode;},[mode]);
   useEffect(()=>{lessonIdRef.current=lessonId;},[lessonId]);
@@ -452,7 +453,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const startListening=useCallback(()=>{
     if(!micGranted||listeningRef.current) return;
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR) return;
+    if(!SR){setMicError("Speech recognition is not available in this browser. Please use Chrome or Edge.");return;}
 
     if(recRef.current){
       try{recRef.current.onend=null;recRef.current.onerror=null;recRef.current.onresult=null;recRef.current.abort();}catch(e){}
@@ -460,14 +461,14 @@ function Classroom({ student, parentNotes, onBack }) {
 
     const rec=new SR();
     // Support both Arabic and English speech recognition
-    rec.lang="ar-SA"; // Primary: Arabic (Saudi Arabia)
+    rec.lang=modeRef.current==="RECITATION" ? "ar-SA" : "en-US";
     rec.continuous=true;
     rec.interimResults=true;
     rec.maxAlternatives=1;
     recRef.current=rec;
     finalBufferRef.current="";
 
-    rec.onstart=()=>{listeningRef.current=true;setIsListening(true);setMicError("");};
+    rec.onstart=()=>{listeningRef.current=true;setIsListening(true);setFaceState("listening");setMicError("");};
 
     rec.onresult=e=>{
       if(speakingRef.current||thinkingRef.current) return;
@@ -495,6 +496,7 @@ function Classroom({ student, parentNotes, onBack }) {
 
     rec.onend=()=>{
       listeningRef.current=false;setIsListening(false);setCaption("");
+      if(!speakingRef.current&&!thinkingRef.current) setFaceState("watching");
       // Always restart unless teacher speaking or thinking
       if(!speakingRef.current&&!thinkingRef.current&&micGranted){
         setTimeout(startListening,300);
@@ -506,10 +508,7 @@ function Classroom({ student, parentNotes, onBack }) {
       if(e.error==="not-allowed"){setMicError("Microphone blocked. Click 🔒 in address bar → Allow Microphone → Reload.");return;}
       if(e.error!=="no-speech"&&e.error!=="aborted") {
         console.log("Speech Recognition Error:",e.error);
-        // Fallback to English if Arabic fails
-        if(e.error==="network"||e.error==="service-not-allowed") {
-          rec.lang="en-US";
-        }
+        if(e.error==="network"||e.error==="service-not-allowed") setMicError("Speech recognition had trouble connecting. I will keep trying.");
       }
       if(!speakingRef.current&&!thinkingRef.current&&micGranted) setTimeout(startListening,500);
     };
@@ -547,7 +546,7 @@ function Classroom({ student, parentNotes, onBack }) {
     let busy=false;
     let failCount=0;
     handRef.current=setInterval(async()=>{
-      if(!waitingRef.current||speakingRef.current||thinkingRef.current||busy) return;
+      if(speakingRef.current||thinkingRef.current||busy) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
@@ -560,13 +559,16 @@ function Classroom({ student, parentNotes, onBack }) {
         });
         failCount=0; // Reset on success
         if(data.raised){
+          const now=Date.now();
+          if(now-lastHandRaiseRef.current<9000){busy=false;return;}
+          lastHandRaiseRef.current=now;
           clearInterval(handRef.current);
           setHandDetected(true);setWaitingForHand(false);
           try{recRef.current?.abort();}catch(e){}
           listeningRef.current=false;setIsListening(false);
           const callOn=`Ahsant! Yes, ya waladi! Go ahead.`;
           setBubble(callOn+" 🎤");
-          speak(callOn,()=>setTimeout(startListening,200));
+          speak(callOn,()=>{setTimeout(startListening,200);startHandWatch();});
         }
       }catch(e){
         failCount++;
@@ -577,7 +579,7 @@ function Classroom({ student, parentNotes, onBack }) {
         }
       }
       busy=false;
-    },1500);
+    },1800);
   },[captureFrame,speak,startListening,student]);
 
   // ── VISION / EMOTION LOOP — via backend with improved error handling ─────────────────
@@ -628,6 +630,7 @@ function Classroom({ student, parentNotes, onBack }) {
       await startCamera("user");
       // Request mic permission immediately on load
       await requestMic();
+      startHandWatch();
       try{
         const ls=await api("POST","/noor/lesson/start",{student_id:student.id});
         lid=ls.lesson_id;setLessonId(lid);
