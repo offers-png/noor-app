@@ -382,7 +382,9 @@ function Classroom({ student, parentNotes, onBack }) {
 
   const classifyStudentText=useCallback((text="")=>{
     const lower=text.toLowerCase();
+    if(/\b(back|go back|end class|stop class|stop lesson|exit|quit)\b/.test(lower)) return "navigation command";
     if(/excuse me|teacher|question|can i ask|i have a question|wait|hold on/.test(lower)) return "student interruption or question";
+    if(/what('s| is) the lesson|what are we learning|what lesson today|where are we/.test(lower)) return "student asks current lesson";
     if(/don't understand|dont understand|confused|what does|what is|why|how/.test(lower)) return "student needs explanation";
     if(/repeat|again|say it again|one more/.test(lower)) return "student needs a repeat";
     if(modeRef.current==="RECITATION") return "recitation or pronunciation attempt";
@@ -395,10 +397,23 @@ function Classroom({ student, parentNotes, onBack }) {
     return [
       `[CLASSROOM STATE: topic="${state.topic}", phase="${state.phase}", turn=${state.turn}, last_teacher_point="${state.lastTeacherPoint}", last_student_input="${state.lastStudentInput}"]`,
       `[EVENT TYPE: ${intent}]`,
-      `[TEACHER ACTION: If this is an interruption, pause and answer it. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
+      `[TEACHER ACTION: If this is an interruption, pause and answer it. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is distraction, redirect. Then continue the same lesson from the last_teacher_point. Do not restart from the beginning. Do not repeat the same item unless the child asked to repeat.]`,
       rawText || "",
     ].join("\n");
   },[classifyStudentText]);
+
+  const stopClassroom=useCallback(()=>{
+    clearInterval(visionRef.current);
+    clearInterval(handRef.current);
+    clearTimeout(sendTimerRef.current);
+    synthRef.current.cancel();
+    try{recRef.current?.abort();}catch(e){}
+    listeningRef.current=false;
+    speakingRef.current=false;
+    thinkingRef.current=false;
+    camStreamRef.current?.getTracks().forEach(t=>t.stop());
+    onBack();
+  },[onBack]);
 
   // ── Camera ──────────────────────────────────────────────
   const startCamera=useCallback(async(facing="user")=>{
@@ -455,6 +470,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const askAI=useCallback(async({text,imageB64,visionAlert,homeworkScan})=>{
     const rawText=text||"";
     const intent=classifyStudentText(rawText);
+    if(intent==="navigation command"){stopClassroom();return;}
     const canInterruptSpeaking=speakingRef.current&&/interruption|question|explanation|repeat/.test(intent);
     if(thinkingRef.current||(!canInterruptSpeaking&&busy()&&!visionAlert)) return;
     if(canInterruptSpeaking){
@@ -490,7 +506,7 @@ function Classroom({ student, parentNotes, onBack }) {
       setIsThinking(false);thinkingRef.current=false;setFaceState("watching");
       if(!visionAlert) speak("Ya waladi, let me try again.",()=>{setWaitingForHand(true);startHandWatch();});
     }
-  },[student,speak,busy,classifyStudentText,classroomMessage]);
+  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom]);
 
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
@@ -741,7 +757,7 @@ function Classroom({ student, parentNotes, onBack }) {
 
       {/* Top bar */}
       <div style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 14px",boxSizing:"border-box",background:"rgba(0,0,0,0.3)"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:"#8dc49a",fontSize:13,cursor:"pointer"}}>← End</button>
+        <button type="button" onClick={stopClassroom} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,color:"#8dc49a",fontSize:13,cursor:"pointer",padding:"7px 10px",position:"relative",zIndex:5}}>← End</button>
         <div style={{fontWeight:"bold",color:"#f0c060",fontSize:14}}>{student.name}</div>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <span style={{width:7,height:7,borderRadius:"50%",background:isListening?"#4ade80":isSpeaking?"#f0c060":isThinking?"#a78bfa":"#6aaa80",display:"inline-block",boxShadow:isListening?"0 0 6px #4ade80":"none"}}/>
