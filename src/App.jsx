@@ -344,8 +344,10 @@ function Classroom({ student, parentNotes, onBack }) {
   const videoRef=useRef(null);
   const canvasRef=useRef(null);
   const camStreamRef=useRef(null);
+  const micStreamRef=useRef(null);
   const synthRef=useRef(window.speechSynthesis);
   const recRef=useRef(null);
+  const mediaRecRef=useRef(null);
   const historyRef=useRef([]);
   const visionRef=useRef(null);
   const handRef=useRef(null);
@@ -361,6 +363,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const sendTimerRef=useRef(null);
   const lastHandRaiseRef=useRef(0);
   const lastAttentionRef=useRef(0);
+  const lastTranscriptRef=useRef("");
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -408,10 +411,12 @@ function Classroom({ student, parentNotes, onBack }) {
     clearTimeout(sendTimerRef.current);
     synthRef.current.cancel();
     try{recRef.current?.abort();}catch(e){}
+    try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
     listeningRef.current=false;
     speakingRef.current=false;
     thinkingRef.current=false;
     camStreamRef.current?.getTracks().forEach(t=>t.stop());
+    micStreamRef.current?.getTracks().forEach(t=>t.stop());
     onBack();
   },[onBack]);
 
@@ -438,8 +443,17 @@ function Classroom({ student, parentNotes, onBack }) {
     api("POST","/noor/transcript/add",{lesson_id:lessonIdRef.current,student_id:student.id,session_id:sessionIdRef.current,speaker,message,mode:modeRef.current}).catch(()=>{});
   },[student]);
 
+  const blobToBase64=useCallback(blob=>new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onloadend=()=>resolve(String(reader.result).split(",")[1]||"");
+    reader.onerror=reject;
+    reader.readAsDataURL(blob);
+  }),[]);
+
   // ── TTS ─────────────────────────────────────────────────
   const speak=useCallback((text,onDone)=>{
+    try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
+    listeningRef.current=false;setIsListening(false);
     synthRef.current.cancel();
     // Strip Arabic script — TTS engine can't pronounce it, sounds broken
     // Also strip any diacritics/harakat. Only speak transliteration.
@@ -511,6 +525,50 @@ function Classroom({ student, parentNotes, onBack }) {
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
     if(!micGranted||listeningRef.current) return;
+    if(window.MediaRecorder&&micStreamRef.current){
+      if(speakingRef.current||thinkingRef.current) return;
+      const chunks=[];
+      const mime=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"audio/webm";
+      let chunkRecorder;
+      try{chunkRecorder=new MediaRecorder(micStreamRef.current,{mimeType:mime});}catch(e){chunkRecorder=null;}
+      if(chunkRecorder){
+        mediaRecRef.current=chunkRecorder;
+        listeningRef.current=true;setIsListening(true);setFaceState("listening");setMicError("");
+        chunkRecorder.ondataavailable=e=>{if(e.data?.size) chunks.push(e.data);};
+        chunkRecorder.onstop=async()=>{
+          listeningRef.current=false;setIsListening(false);
+          if(!speakingRef.current&&!thinkingRef.current) setFaceState("watching");
+          if(chunks.length&&chunks.reduce((n,b)=>n+b.size,0)>1200){
+            try{
+              const audio_b64=await blobToBase64(new Blob(chunks,{type:mime}));
+              const data=await api("POST","/noor/speech-to-text",{audio_b64});
+              const said=(data.transcript||"").trim();
+              const tooSimilar=said&&said.toLowerCase()===lastTranscriptRef.current.toLowerCase();
+              if(said.length>2&&!tooSimilar){
+                lastTranscriptRef.current=said;
+                setCaption(said);
+                saveT("student",said);
+                setHandDetected(false);setWaitingForHand(false);
+                const img=captureFrame();
+                askAI({text:said,imageB64:img});
+                return;
+              }
+            }catch(e){
+              console.log("Audio transcription error:",e.message);
+              setMicError("I had trouble hearing that. Please try again.");
+            }
+          }
+          if(!speakingRef.current&&!thinkingRef.current&&micGranted) setTimeout(startListening,250);
+        };
+        try{
+          chunkRecorder.start();
+          setTimeout(()=>{try{if(chunkRecorder.state==="recording") chunkRecorder.stop();}catch(e){}},3200);
+          return;
+        }catch(e){
+          listeningRef.current=false;setIsListening(false);
+        }
+      }
+    }
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){setMicError("Speech recognition is not available in this browser. Please use Chrome or Edge.");return;}
 
@@ -572,7 +630,7 @@ function Classroom({ student, parentNotes, onBack }) {
     };
 
     try{rec.start();}catch(e){listeningRef.current=false;setTimeout(startListening,1000);}
-  },[micGranted,captureFrame,askAI,saveT]);
+  },[micGranted,captureFrame,askAI,saveT,blobToBase64]);
 
   // Restart listening after teacher finishes speaking
   useEffect(()=>{
@@ -585,7 +643,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const requestMic=useCallback(async()=>{
     try{
       const s=await navigator.mediaDevices.getUserMedia({audio:true});
-      s.getTracks().forEach(t=>t.stop()); // just need the permission
+      micStreamRef.current=s;
       setMicGranted(true);
       setMicError("");
     }catch(e){
@@ -725,7 +783,9 @@ function Classroom({ student, parentNotes, onBack }) {
       clearInterval(visionRef.current);clearInterval(handRef.current);clearTimeout(sendTimerRef.current);
       synthRef.current.cancel();
       try{recRef.current?.abort();}catch(e){}
+      try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
       camStreamRef.current?.getTracks().forEach(t=>t.stop());
+      micStreamRef.current?.getTracks().forEach(t=>t.stop());
       if(lid||lessonIdRef.current){
         const lId=lid||lessonIdRef.current,sId=sid||sessionIdRef.current;
         if(sId) api("POST","/noor/session/end",{session_id:sId,lesson_id:lId,student_id:student.id,cheating_attempts:cheatingRef.current}).catch(()=>{});
