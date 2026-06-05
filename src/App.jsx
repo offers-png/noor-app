@@ -306,6 +306,8 @@ function StudentSelect({ onSelect, onDashboard }) {
   const [students,setStudents]=useState([]);
   const [loading,setLoading]=useState(true);
   const [adding,setAdding]=useState(false);
+  const [groupMode,setGroupMode]=useState(false);
+  const [selectedIds,setSelectedIds]=useState([]);
   const [name,setName]=useState(""), [age,setAge]=useState(""), [saving,setSaving]=useState(false);
   const avatars=["🧒","👦","👧","🧒‍♀️","👶","🧑"];
   useEffect(()=>{api("GET","/noor/students").then(setStudents).catch(()=>setStudents([])).finally(()=>setLoading(false));},[]);
@@ -313,18 +315,33 @@ function StudentSelect({ onSelect, onDashboard }) {
     if(!name.trim()) return; setSaving(true);
     try{const s=await api("POST","/noor/students",{name:name.trim(),age:age?parseInt(age):null,level:"beginner"});setStudents(p=>[...p,s]);setName("");setAge("");setAdding(false);}catch(e){}setSaving(false);
   };
+  const toggleStudent=id=>setSelectedIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const startGroup=()=>{
+    const picked=students.filter(s=>selectedIds.includes(s.id));
+    if(picked.length) onSelect(picked);
+  };
   return(
     <div style={{background:"linear-gradient(160deg,#051a0d,#0d3320)",minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'Segoe UI',Arial,sans-serif",color:"white",padding:24,gap:20}}>
       <div style={{textAlign:"center",marginTop:20}}><Face state="idle" size={100}/><div style={{fontSize:26,fontWeight:"bold",color:"#f0c060",marginTop:8}}>✨ Sheikh Noor</div><div style={{fontSize:14,color:"#a8d8b0"}}>Islamic AI Teacher</div></div>
       {loading?<div style={{color:"#6aaa80"}}>Loading...</div>:(
         <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:380}}>
+          {students.length>1&&(
+            <button onClick={()=>{setGroupMode(p=>!p);setSelectedIds([]);}} style={{background:groupMode?"#1a7a40":"rgba(255,255,255,0.08)",border:`2px solid ${groupMode?"#1a7a40":"rgba(255,255,255,0.15)"}`,borderRadius:18,padding:"12px 14px",color:"white",fontSize:15,fontWeight:"bold",cursor:"pointer"}}>
+              {groupMode?"Single student mode":"Start group class"}
+            </button>
+          )}
           {students.map((s,i)=>(
-            <button key={s.id} onClick={()=>onSelect(s)} style={{background:"rgba(255,255,255,0.08)",border:"2px solid rgba(255,255,255,0.15)",borderRadius:20,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",color:"white",textAlign:"left"}}>
+            <button key={s.id} onClick={()=>groupMode?toggleStudent(s.id):onSelect([s])} style={{background:selectedIds.includes(s.id)?"rgba(26,122,64,0.42)":"rgba(255,255,255,0.08)",border:`2px solid ${selectedIds.includes(s.id)?"#4ade80":"rgba(255,255,255,0.15)"}`,borderRadius:20,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",color:"white",textAlign:"left"}}>
               <span style={{fontSize:36}}>{avatars[i%avatars.length]}</span>
               <div><div style={{fontSize:20,fontWeight:"bold"}}>{s.name}</div><div style={{fontSize:13,color:"#8dc49a"}}>Age {s.age||"?"} · {s.level}</div></div>
-              <div style={{marginLeft:"auto",fontSize:22}}>▶</div>
+              <div style={{marginLeft:"auto",fontSize:22}}>{groupMode?(selectedIds.includes(s.id)?"Selected":"Add"):"Start"}</div>
             </button>
           ))}
+          {groupMode&&selectedIds.length>0&&(
+            <button onClick={startGroup} style={{background:"linear-gradient(135deg,#1a7a40,#0e4d2a)",border:"none",borderRadius:20,padding:"15px",color:"white",fontSize:16,fontWeight:"bold",cursor:"pointer",boxShadow:"0 6px 18px rgba(0,0,0,0.3)"}}>
+              Start class with {selectedIds.length} students
+            </button>
+          )}
           {!adding?(
             <button onClick={()=>setAdding(true)} style={{background:"rgba(26,122,64,0.3)",border:"2px dashed rgba(26,122,64,0.6)",borderRadius:20,padding:"14px",color:"#4ade80",fontSize:16,cursor:"pointer",fontWeight:"bold"}}>+ Add Student</button>
           ):(
@@ -347,7 +364,10 @@ function StudentSelect({ onSelect, onDashboard }) {
 // ══════════════════════════════════════════════════════════
 //  PARENT BRIEFING
 // ══════════════════════════════════════════════════════════
-function ParentBriefing({ student, onStart }) {
+function ParentBriefing({ students, onStart }) {
+  const classStudents=Array.isArray(students)?students.filter(Boolean):[students].filter(Boolean);
+  const primary=classStudents[0]||{};
+  const classLabel=classStudents.length>1?`${classStudents.length} students`:primary.name;
   const [notes,setNotes]=useState("");
   const [topics,setTopics]=useState([]);
   const [saving,setSaving]=useState(false);
@@ -369,7 +389,7 @@ function ParentBriefing({ student, onStart }) {
     const topicLabels=topics.map(t=>topicOptions.find(o=>o.key===t)?.label.slice(2)).filter(Boolean);
     const combined=[...topicLabels, notes.trim()].filter(Boolean).join(". ");
     try{
-      if(combined) await api("POST","/noor/parent-notes",{student_id:student.id,notes:combined,focus_topics:topics});
+      if(combined) await Promise.all(classStudents.map(s=>api("POST","/noor/parent-notes",{student_id:s.id,notes:combined,focus_topics:topics}).catch(()=>{})));
       onStart(combined||null);
     }catch(e){onStart(null);}
     setSaving(false);
@@ -377,7 +397,7 @@ function ParentBriefing({ student, onStart }) {
 
   return(
     <div style={{background:"linear-gradient(160deg,#051a0d,#0d3320)",minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'Segoe UI',Arial,sans-serif",color:"white",padding:24,gap:20,overflowY:"auto"}}>
-      <div style={{textAlign:"center",marginTop:10}}><div style={{fontSize:32}}>📋</div><div style={{fontSize:22,fontWeight:"bold",color:"#f0c060"}}>Today's Lesson</div><div style={{fontSize:14,color:"#a8d8b0",marginTop:4}}>For {student.name}</div></div>
+      <div style={{textAlign:"center",marginTop:10}}><div style={{fontSize:32}}>📋</div><div style={{fontSize:22,fontWeight:"bold",color:"#f0c060"}}>Today's Lesson</div><div style={{fontSize:14,color:"#a8d8b0",marginTop:4}}>For {classLabel}</div></div>
       <div style={{width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:16}}>
         <div>
           <div style={{fontSize:14,color:"#f0c060",marginBottom:10,fontWeight:"bold"}}>Choose today's topic:</div>
@@ -396,11 +416,11 @@ function ParentBriefing({ student, onStart }) {
         <div>
           <div style={{fontSize:13,color:"#8dc49a",marginBottom:8}}>Extra notes for Sheikh Noor: <span style={{color:"#6aaa80"}}>(optional)</span></div>
           <textarea value={notes} onChange={e=>setNotes(e.target.value)}
-            placeholder={`e.g. "${student.name} struggles with the letter Ain. Please go slowly."`}
+            placeholder={classStudents.length>1?`e.g. "Uzair needs help with Ba. Aisha is ready for Tha. Rotate questions."`:`e.g. "${primary.name} struggles with the letter Ain. Please go slowly."`}
             rows={3} style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:14,padding:"12px",color:"white",fontSize:14,outline:"none",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/>
         </div>
         <button onClick={submit} disabled={saving} style={{background:"linear-gradient(135deg,#1a7a40,#0e4d2a)",border:"none",borderRadius:20,color:"white",padding:"18px",fontSize:18,fontWeight:"bold",cursor:"pointer",boxShadow:"0 6px 24px rgba(0,0,0,0.4)"}}>
-          {saving?"Starting...":`▶ Start ${student.name}'s Class`}
+          {saving?"Starting...":classStudents.length>1?"Start Group Class":`Start ${primary.name}'s Class`}
         </button>
         <button onClick={()=>onStart(null)} style={{background:"transparent",border:"none",color:"#6aaa80",fontSize:13,cursor:"pointer",textAlign:"center"}}>Skip — Let teacher decide</button>
       </div>
@@ -411,7 +431,12 @@ function ParentBriefing({ student, onStart }) {
 // ══════════════════════════════════════════════════════════
 //  CLASSROOM
 // ══════════════════════════════════════════════════════════
-function Classroom({ student, parentNotes, onBack }) {
+function Classroom({ students, parentNotes, onBack }) {
+  const classRoster=Array.isArray(students)?students.filter(Boolean):[students].filter(Boolean);
+  const student=classRoster[0]||{};
+  const isGroupClass=classRoster.length>1;
+  const rosterText=classRoster.map((s,i)=>`${i+1}. ${s.name}${s.age?`, age ${s.age}`:""} (${s.level||"beginner"})`).join("; ");
+  const [activeStudentId,setActiveStudentId]=useState(student.id);
   const [faceState,setFaceState]=useState("idle");
   const [bubble,setBubble]=useState("Starting class...");
   const [caption,setCaption]=useState("");
@@ -430,6 +455,7 @@ function Classroom({ student, parentNotes, onBack }) {
   const [cheatingCount,setCheatingCount]=useState(0);
   const [micGranted,setMicGranted]=useState(false);
   const [micError,setMicError]=useState("");
+  const activeStudent=classRoster.find(s=>s.id===activeStudentId)||student;
 
   const videoRef=useRef(null);
   const canvasRef=useRef(null);
@@ -458,6 +484,8 @@ function Classroom({ student, parentNotes, onBack }) {
   const lastTranscriptRef=useRef("");
   const backendSttRef=useRef(true);
   const lastInterruptAtRef=useRef(0);
+  const activeStudentIdRef=useRef(student.id);
+  const studentMemoryRef=useRef(null);
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -471,7 +499,11 @@ function Classroom({ student, parentNotes, onBack }) {
     lastTeacherPoint: "",
     lastStudentInput: "",
   });
+  if(!studentMemoryRef.current){
+    studentMemoryRef.current=Object.fromEntries(classRoster.map(s=>[s.id,{name:s.name,participation:"new",lastInput:"",recentMistake:"",step:1}]));
+  }
 
+  useEffect(()=>{activeStudentIdRef.current=activeStudentId;},[activeStudentId]);
   useEffect(()=>{modeRef.current=mode;},[mode]);
   useEffect(()=>{lessonIdRef.current=lessonId;},[lessonId]);
   useEffect(()=>{sessionIdRef.current=sessionId;},[sessionId]);
@@ -482,6 +514,15 @@ function Classroom({ student, parentNotes, onBack }) {
   useEffect(()=>{listeningRef.current=isListening;},[isListening]);
 
   const busy=useCallback(()=>speakingRef.current||thinkingRef.current,[]);
+
+  const inferStudentFromText=useCallback((text="")=>{
+    const lower=text.toLowerCase();
+    const named=classRoster.find(s=>{
+      const name=(s.name||"").toLowerCase();
+      return name&&lower.includes(name);
+    });
+    return named||classRoster.find(s=>s.id===activeStudentIdRef.current)||student;
+  },[classRoster,student]);
 
   const classifyStudentText=useCallback((text="")=>{
     const lower=text.toLowerCase();
@@ -501,7 +542,9 @@ function Classroom({ student, parentNotes, onBack }) {
     const intent=visionAlert ? "camera/attention event" : homeworkScan ? "homework scan" : classifyStudentText(rawText);
     return [
       `[REAL CLASSROOM BRIEF]`,
-      `Student: ${student.name}${student.age ? `, age ${student.age}` : ""}.`,
+      `Class roster: ${rosterText || `${student.name}${student.age ? `, age ${student.age}` : ""}`}.`,
+      `Active speaker: ${activeStudent?.name || student.name}. If unsure who spoke, ask the child to say their name before answering.`,
+      `Per-student memory: ${JSON.stringify(studentMemoryRef.current||{})}.`,
       `Mode: ${modeRef.current}. Topic: ${state.topic}. Lesson step: ${state.step}. Phase: ${state.phase}. Turn: ${state.turn}.`,
       `Student state: energy=${state.energy}; attention=${state.attention}; participation=${state.participation}.`,
       `Recent mistake/confusion: ${state.recentMistake || "none noted"}.`,
@@ -509,12 +552,12 @@ function Classroom({ student, parentNotes, onBack }) {
       `Last teacher point: ${state.lastTeacherPoint || "none yet"}.`,
       `Last student input: ${state.lastStudentInput || "none yet"}.`,
       `[EVENT TYPE: ${intent}]`,
-      `[TEACHER ACTION: Act like the live teacher in charge. First respond to this exact event. Then do one teacher move only: explain, model, correct, praise, redirect, ask, or advance. If this is an interruption, pause and answer it. If the child asks an on-topic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is silence, re-engage the child with one simple prompt. If it is distraction, redirect. Continue from the last_teacher_point. Do not restart. Do not repeat the same item unless the child asked to repeat.]`,
+      `[TEACHER ACTION: Act like the live teacher in charge. First respond to this exact event. Then do one teacher move only: explain, model, correct, praise, redirect, ask, or advance. In a group, address the active speaker by name when known and rotate callouts across the roster. Do not call every child by the same name. If you are unsure who spoke, ask who is speaking. If this is an interruption, pause and answer it. If the child asks an on-topic lesson question, answer it directly before continuing. If the child asks the current lesson, name the topic and continue from the last_teacher_point. If it is silence, re-engage the class with one simple prompt and call on one student by name. If it is distraction, redirect. Continue from the last_teacher_point. Do not restart. Do not repeat the same item unless the child asked to repeat.]`,
       rawText || "",
     ].join("\n");
-  },[classifyStudentText,student]);
+  },[activeStudent,classifyStudentText,rosterText,student]);
 
-  const updateTeacherMemory=useCallback((intent, rawText, reply)=>{
+  const updateTeacherMemory=useCallback((intent, rawText, reply, speaker=activeStudent)=>{
     const current=lessonStateRef.current;
     const lower=`${rawText} ${reply}`.toLowerCase();
     const needsHelp=/confused|don't understand|dont understand|wrong|mistake|again|repeat|try/.test(lower);
@@ -533,7 +576,18 @@ function Classroom({ student, parentNotes, onBack }) {
       lastTeacherPoint: reply.slice(0,220),
       lastStudentInput: rawText.slice(0,160),
     };
-  },[]);
+    if(speaker?.id){
+      const prior=studentMemoryRef.current?.[speaker.id]||{name:speaker.name,step:1};
+      studentMemoryRef.current={...(studentMemoryRef.current||{}),[speaker.id]:{
+        ...prior,
+        name:speaker.name,
+        step: shouldAdvance ? (prior.step||1)+1 : (prior.step||1),
+        participation: intent.includes("question") ? "asking questions" : needsHelp ? "needs support" : answered ? "responding well" : "participating",
+        recentMistake: needsHelp ? rawText.slice(0,120) : (prior.recentMistake||""),
+        lastInput: rawText.slice(0,160),
+      }};
+    }
+  },[activeStudent]);
 
   const stopClassroom=useCallback(()=>{
     clearInterval(visionRef.current);
@@ -580,7 +634,8 @@ function Classroom({ student, parentNotes, onBack }) {
 
   const saveT=useCallback((speaker,message)=>{
     if(!lessonIdRef.current) return;
-    api("POST","/noor/transcript/add",{lesson_id:lessonIdRef.current,student_id:student.id,session_id:sessionIdRef.current,speaker,message,mode:modeRef.current}).catch(()=>{});
+    const studentId=speaker==="student" ? (activeStudentIdRef.current||student.id) : student.id;
+    api("POST","/noor/transcript/add",{lesson_id:lessonIdRef.current,student_id:studentId,session_id:sessionIdRef.current,speaker,message,mode:modeRef.current}).catch(()=>{});
   },[student]);
 
   const blobToBase64=useCallback(blob=>new Promise((resolve,reject)=>{
@@ -662,6 +717,8 @@ function Classroom({ student, parentNotes, onBack }) {
     const rawText=text||"";
     const intent=classifyStudentText(rawText);
     if(intent==="navigation command"){stopClassroom();return;}
+    const speaker=inferStudentFromText(rawText);
+    if(speaker?.id) setActiveStudentId(speaker.id);
     clearTimeout(silenceTimerRef.current);
     const canInterruptSpeaking=speakingRef.current&&/interruption|question|explanation|repeat/.test(intent);
     if(thinkingRef.current||(!canInterruptSpeaking&&busy()&&!visionAlert)) return;
@@ -682,7 +739,7 @@ function Classroom({ student, parentNotes, onBack }) {
       });
       const reply=data.reply;
       historyRef.current=[...historyRef.current,{role:"user",content:msg},{role:"assistant",content:reply}].slice(-18);
-      updateTeacherMemory(intent,rawText,reply);
+      updateTeacherMemory(intent,rawText,reply,speaker);
       setIsThinking(false);thinkingRef.current=false;setBubble(reply);
       speak(reply,()=>{
         setWaitingForHand(true);
@@ -692,7 +749,7 @@ function Classroom({ student, parentNotes, onBack }) {
       setIsThinking(false);thinkingRef.current=false;setFaceState("watching");
       if(!visionAlert) speak("Ya waladi, let me try again.",()=>{setWaitingForHand(true);startHandWatch();});
     }
-  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom,updateTeacherMemory]);
+  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom,updateTeacherMemory,inferStudentFromText]);
 
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
@@ -720,6 +777,8 @@ function Classroom({ student, parentNotes, onBack }) {
                 lastTranscriptRef.current=said;
                 clearTimeout(silenceTimerRef.current);
                 setCaption(said);
+                const speaker=inferStudentFromText(said);
+                if(speaker?.id){activeStudentIdRef.current=speaker.id;setActiveStudentId(speaker.id);}
                 saveT("student",said);
                 setHandDetected(false);setWaitingForHand(false);
                 const img=captureFrame();
@@ -776,6 +835,8 @@ function Classroom({ student, parentNotes, onBack }) {
             finalBufferRef.current="";
             if(said.length>1){
               setCaption(said);
+              const speaker=inferStudentFromText(said);
+              if(speaker?.id){activeStudentIdRef.current=speaker.id;setActiveStudentId(speaker.id);}
               saveT("student",said);
               setHandDetected(false);setWaitingForHand(false);
               const img=captureFrame();
@@ -808,7 +869,7 @@ function Classroom({ student, parentNotes, onBack }) {
     };
 
     try{rec.start();}catch(e){listeningRef.current=false;setTimeout(startListening,1000);}
-  },[micGranted,captureFrame,askAI,saveT,blobToBase64]);
+  },[micGranted,captureFrame,askAI,saveT,blobToBase64,inferStudentFromText]);
 
   // Restart listening after teacher finishes speaking
   useEffect(()=>{
@@ -860,7 +921,7 @@ function Classroom({ student, parentNotes, onBack }) {
           setHandDetected(true);setWaitingForHand(false);
           try{recRef.current?.abort();}catch(e){}
           listeningRef.current=false;setIsListening(false);
-          const callOn=`Ahsant! Yes, ya waladi! Go ahead.`;
+          const callOn=isGroupClass?`Ahsant. Whoever raised the hand, say your name first, then ask.`:`Ahsant! Yes, ya waladi! Go ahead.`;
           setBubble(callOn+" 🎤");
           speak(callOn,()=>{setTimeout(startListening,200);startHandWatch();});
         }
@@ -874,7 +935,7 @@ function Classroom({ student, parentNotes, onBack }) {
       }
       busy=false;
     },1800);
-  },[captureFrame,speak,startListening,student]);
+  },[captureFrame,speak,startListening,student,isGroupClass]);
 
   // ── VISION / EMOTION LOOP — via backend with improved error handling ─────────────────
   const startVision=useCallback(()=>{
@@ -938,9 +999,10 @@ function Classroom({ student, parentNotes, onBack }) {
 
       // Build opening message — pass parent topic explicitly
       // Enhance scholar/sheikh behavior: authoritative, knowledgeable, patient teacher
+      const classLine=isGroupClass?`class roster=${rosterText}; this is a group class, rotate questions by name and never call every student by one name`:`student=${student.name}, level=${student.level}`;
       const topicLine=parentNotes
-        ?`[PARENT TOPIC: ${parentNotes}] [REAL CLASSROOM OPENING: student=${student.name}, level=${student.level}] Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask the child to do one small action. Do not cover the whole lesson.`
-        :`[REAL CLASSROOM OPENING: student=${student.name}, level=${student.level}] Choose a suitable Islamic topic. Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask the child to do one small action. Do not cover the whole lesson.`;
+        ?`[PARENT TOPIC: ${parentNotes}] [REAL CLASSROOM OPENING: ${classLine}] Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`
+        :`[REAL CLASSROOM OPENING: ${classLine}] Choose a suitable Islamic topic. Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`;
 
       setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
       try{
@@ -953,7 +1015,9 @@ function Classroom({ student, parentNotes, onBack }) {
       }catch(e){
         setIsThinking(false);thinkingRef.current=false;
         // Fallback message with scholar/sheikh tone
-        const fb=`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, ${student.name}! I am Sheikh Noor, your Islamic teacher. Today we embark on a journey of knowledge and wisdom. Listen carefully, ya waladi. Raise your hand when you have a question or are ready to answer. May Allah bless your learning!`;
+        const fb=isGroupClass
+          ?`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, my students. I am Sheikh Noor, your Islamic teacher. I will call each of you by name, one at a time. Raise your hand when you have a question, and say your name first.`
+          :`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, ${student.name}! I am Sheikh Noor, your Islamic teacher. Today we embark on a journey of knowledge and wisdom. Listen carefully, ya waladi. Raise your hand when you have a question or are ready to answer. May Allah bless your learning!`;
         setBubble(fb);speak(fb,()=>{setWaitingForHand(true);startHandWatch();startVision();startListening();});
       }
     };
@@ -983,7 +1047,7 @@ function Classroom({ student, parentNotes, onBack }) {
 
   const doHomework=async()=>{
     clearInterval(handRef.current);setWaitingForHand(false);setMode("HOMEWORK");
-    speak("Ya waladi, hold your homework up to the camera now.",async()=>{
+    speak(isGroupClass?`${activeStudent?.name||"My student"}, hold your homework up to the camera now.`:"Ya waladi, hold your homework up to the camera now.",async()=>{
       await startCamera("environment");
       setTimeout(async()=>{
         const img=captureFrame();await startCamera("user");
@@ -999,7 +1063,7 @@ function Classroom({ student, parentNotes, onBack }) {
       {/* Top bar */}
       <div style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 14px",boxSizing:"border-box",background:"rgba(0,0,0,0.3)"}}>
         <button type="button" onClick={stopClassroom} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,color:"#8dc49a",fontSize:13,cursor:"pointer",padding:"7px 10px",position:"relative",zIndex:5}}>← End</button>
-        <div style={{fontWeight:"bold",color:"#f0c060",fontSize:14}}>{student.name}</div>
+        <div style={{fontWeight:"bold",color:"#f0c060",fontSize:14}}>{isGroupClass?`${classRoster.length} students`:student.name}</div>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <span style={{width:7,height:7,borderRadius:"50%",background:isListening?"#4ade80":isSpeaking?"#f0c060":isThinking?"#a78bfa":"#6aaa80",display:"inline-block",boxShadow:isListening?"0 0 6px #4ade80":"none"}}/>
           <span style={{fontSize:11,color:isListening?"#4ade80":isSpeaking?"#f0c060":isThinking?"#a78bfa":"#6aaa80"}}>
@@ -1010,6 +1074,15 @@ function Classroom({ student, parentNotes, onBack }) {
 
       {alertMsg&&<div style={{width:"100%",background:"#922b21",textAlign:"center",padding:"7px",fontSize:13,fontWeight:"bold"}}>{alertMsg}</div>}
       {micError&&<div style={{width:"100%",background:"#7d3c00",textAlign:"center",padding:"7px",fontSize:12}}>{micError}</div>}
+      {isGroupClass&&(
+        <div style={{width:"100%",display:"flex",gap:6,padding:"7px 14px 0",boxSizing:"border-box",overflowX:"auto"}}>
+          {classRoster.map(s=>(
+            <button key={s.id} onClick={()=>setActiveStudentId(s.id)} style={{flex:"0 0 auto",background:activeStudentId===s.id?"#1a7a40":"rgba(255,255,255,0.08)",border:`1px solid ${activeStudentId===s.id?"#4ade80":"rgba(255,255,255,0.15)"}`,borderRadius:999,color:"white",padding:"6px 10px",fontSize:12,fontWeight:activeStudentId===s.id?"bold":"normal",cursor:"pointer"}}>
+              {activeStudentId===s.id?"Listening to ":""}{s.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Mic unlock — only shows if not granted */}
       {!micGranted&&(
@@ -1046,7 +1119,7 @@ function Classroom({ student, parentNotes, onBack }) {
           onSubmit={img=>{
             const label=writingPrompt.label||"the letter";
             setWritingPrompt(null);
-            askAI({text:`[WRITING PRACTICE: The child wrote ${label} on the touchscreen. Look at the drawing. Praise what is correct, give one specific correction if needed, then continue the lesson without restarting.]`,imageB64:img});
+            askAI({text:`[WRITING PRACTICE: ${activeStudent?.name||"The child"} wrote ${label} on the touchscreen. Look at the drawing. Praise what is correct, give one specific correction if needed, then continue the lesson without restarting.]`,imageB64:img});
           }}
         />
       )}
@@ -1175,12 +1248,12 @@ function Dashboard({ students, onBack }) {
 // ══════════════════════════════════════════════════════════
 export default function App() {
   const [screen,setScreen]=useState("select");
-  const [student,setStudent]=useState(null);
+  const [classStudents,setClassStudents]=useState([]);
   const [parentNotes,setParentNotes]=useState(null);
   const [students,setStudents]=useState([]);
   useEffect(()=>{api("GET","/noor/students").then(setStudents).catch(()=>{});},[screen]);
-  if(screen==="briefing"&&student) return <ParentBriefing student={student} onStart={n=>{setParentNotes(n);setScreen("class");}}/>;
-  if(screen==="class"&&student) return <Classroom student={student} parentNotes={parentNotes} onBack={()=>setScreen("select")}/>;
+  if(screen==="briefing"&&classStudents.length) return <ParentBriefing students={classStudents} onStart={n=>{setParentNotes(n);setScreen("class");}}/>;
+  if(screen==="class"&&classStudents.length) return <Classroom students={classStudents} parentNotes={parentNotes} onBack={()=>setScreen("select")}/>;
   if(screen==="dashboard") return <Dashboard students={students} onBack={()=>setScreen("select")}/>;
-  return <StudentSelect onSelect={s=>{setStudent(s);setScreen("briefing");}} onDashboard={()=>setScreen("dashboard")}/>;
+  return <StudentSelect onSelect={picked=>{setClassStudents(Array.isArray(picked)?picked:[picked]);setScreen("briefing");}} onDashboard={()=>setScreen("dashboard")}/>;
 }
