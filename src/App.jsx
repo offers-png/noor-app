@@ -486,6 +486,7 @@ function Classroom({ students, parentNotes, onBack }) {
   const lastInterruptAtRef=useRef(0);
   const activeStudentIdRef=useRef(student.id);
   const studentMemoryRef=useRef(null);
+  const continuationMemoryRef=useRef("");
   const lessonStateRef=useRef({
     topic: parentNotes || "teacher-selected Islamic lesson",
     phase: "opening",
@@ -588,6 +589,19 @@ function Classroom({ students, parentNotes, onBack }) {
       }};
     }
   },[activeStudent]);
+
+  const buildContinuationSummary=useCallback(()=>{
+    const state=lessonStateRef.current;
+    return [
+      `Topic: ${state.topic}.`,
+      `Stopped at phase ${state.phase}, step ${state.step}.`,
+      `Last teacher point: ${state.lastTeacherPoint || "not recorded"}.`,
+      `Last student input: ${state.lastStudentInput || "not recorded"}.`,
+      `Recent mistake/confusion: ${state.recentMistake || "none noted"}.`,
+      `Next class: continue from the last teacher point; do not restart from the beginning.`,
+      `Per-student memory: ${JSON.stringify(studentMemoryRef.current||{})}.`,
+    ].join("\n").slice(0,1800);
+  },[]);
 
   const stopClassroom=useCallback(()=>{
     clearInterval(visionRef.current);
@@ -996,13 +1010,27 @@ function Classroom({ students, parentNotes, onBack }) {
         const sess=await api("POST","/noor/session/start",{lesson_id:lid,student_id:student.id});
         sid=sess.id;setSessionId(sid);
       }catch(e){}
+      try{
+        const profiles=await Promise.all(classRoster.map(s=>api("GET",`/noor/student/${s.id}`).catch(()=>null)));
+        const memories=profiles.map((p,i)=>{
+          const child=classRoster[i];
+          const recent=(p?.recent_lessons||[]).find(l=>l.summary||l.notes);
+          if(!recent) return `${child.name}: no prior lesson memory yet.`;
+          const when=recent.started_at?new Date(recent.started_at).toLocaleDateString():"last class";
+          return `${child.name} (${when}): ${recent.summary||recent.notes}`;
+        });
+        continuationMemoryRef.current=memories.join("\n").slice(0,1800);
+      }catch(e){
+        continuationMemoryRef.current="";
+      }
 
       // Build opening message — pass parent topic explicitly
       // Enhance scholar/sheikh behavior: authoritative, knowledgeable, patient teacher
       const classLine=isGroupClass?`class roster=${rosterText}; this is a group class, rotate questions by name and never call every student by one name`:`student=${student.name}, level=${student.level}`;
+      const memoryLine=continuationMemoryRef.current?`[CONTINUATION MEMORY FROM LAST CLASS]\n${continuationMemoryRef.current}\nContinue from this memory unless the parent gave a new topic. Do not restart from the beginning.`:"";
       const topicLine=parentNotes
-        ?`[PARENT TOPIC: ${parentNotes}] [REAL CLASSROOM OPENING: ${classLine}] Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`
-        :`[REAL CLASSROOM OPENING: ${classLine}] Choose a suitable Islamic topic. Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`;
+        ?`${memoryLine}\n[PARENT TOPIC: ${parentNotes}] [REAL CLASSROOM OPENING: ${classLine}] Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`
+        :`${memoryLine}\n[REAL CLASSROOM OPENING: ${classLine}] Use the continuation memory if present; otherwise choose a suitable Islamic topic. Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`;
 
       setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
       try{
@@ -1034,7 +1062,7 @@ function Classroom({ students, parentNotes, onBack }) {
       if(lid||lessonIdRef.current){
         const lId=lid||lessonIdRef.current,sId=sid||sessionIdRef.current;
         if(sId) api("POST","/noor/session/end",{session_id:sId,lesson_id:lId,student_id:student.id,cheating_attempts:cheatingRef.current}).catch(()=>{});
-        api("POST","/noor/lesson/end",{lesson_id:lId,student_id:student.id,topics_covered:[]}).catch(()=>{});
+        api("POST","/noor/lesson/end",{lesson_id:lId,student_id:student.id,topics_covered:[modeRef.current],summary:buildContinuationSummary()}).catch(()=>{});
       }
     };
   },[]);
