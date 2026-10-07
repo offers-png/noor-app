@@ -1,18 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const API = "https://main-backend-k32m.onrender.com";
-
-const api = async (method, path, body) => {
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-};
-
-
+import { api } from "./api";
+import StudentSelect from "./StudentSelect";
 
 // ── Mouth Avatar ──────────────────────────────────────────
 const MOUTH_SHAPES = {
@@ -302,75 +291,17 @@ function Face({ state, size=95 }) {
 // ══════════════════════════════════════════════════════════
 //  STUDENT SELECT
 // ══════════════════════════════════════════════════════════
-function StudentSelect({ onSelect, onDashboard }) {
-  const [students,setStudents]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [adding,setAdding]=useState(false);
-  const [groupMode,setGroupMode]=useState(false);
-  const [selectedIds,setSelectedIds]=useState([]);
-  const [name,setName]=useState(""), [age,setAge]=useState(""), [saving,setSaving]=useState(false);
-  const avatars=["🧒","👦","👧","🧒‍♀️","👶","🧑"];
-  useEffect(()=>{api("GET","/noor/students").then(setStudents).catch(()=>setStudents([])).finally(()=>setLoading(false));},[]);
-  const addStudent=async()=>{
-    if(!name.trim()) return; setSaving(true);
-    try{const s=await api("POST","/noor/students",{name:name.trim(),age:age?parseInt(age):null,level:"beginner"});setStudents(p=>[...p,s]);setName("");setAge("");setAdding(false);}catch(e){}setSaving(false);
-  };
-  const toggleStudent=id=>setSelectedIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
-  const startGroup=()=>{
-    const picked=students.filter(s=>selectedIds.includes(s.id));
-    if(picked.length) onSelect(picked);
-  };
-  return(
-    <div style={{background:"linear-gradient(160deg,#051a0d,#0d3320)",minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'Segoe UI',Arial,sans-serif",color:"white",padding:24,gap:20}}>
-      <div style={{textAlign:"center",marginTop:20}}><Face state="idle" size={100}/><div style={{fontSize:26,fontWeight:"bold",color:"#f0c060",marginTop:8}}>✨ Sheikh Noor</div><div style={{fontSize:14,color:"#a8d8b0"}}>Islamic AI Teacher</div></div>
-      {loading?<div style={{color:"#6aaa80"}}>Loading...</div>:(
-        <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:380}}>
-          {students.length>1&&(
-            <button onClick={()=>{setGroupMode(p=>!p);setSelectedIds([]);}} style={{background:groupMode?"#1a7a40":"rgba(255,255,255,0.08)",border:`2px solid ${groupMode?"#1a7a40":"rgba(255,255,255,0.15)"}`,borderRadius:18,padding:"12px 14px",color:"white",fontSize:15,fontWeight:"bold",cursor:"pointer"}}>
-              {groupMode?"Single student mode":"Start group class"}
-            </button>
-          )}
-          {students.map((s,i)=>(
-            <button key={s.id} onClick={()=>groupMode?toggleStudent(s.id):onSelect([s])} style={{background:selectedIds.includes(s.id)?"rgba(26,122,64,0.42)":"rgba(255,255,255,0.08)",border:`2px solid ${selectedIds.includes(s.id)?"#4ade80":"rgba(255,255,255,0.15)"}`,borderRadius:20,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",color:"white",textAlign:"left"}}>
-              <span style={{fontSize:36}}>{avatars[i%avatars.length]}</span>
-              <div><div style={{fontSize:20,fontWeight:"bold"}}>{s.name}</div><div style={{fontSize:13,color:"#8dc49a"}}>Age {s.age||"?"} · {s.level}</div></div>
-              <div style={{marginLeft:"auto",fontSize:22}}>{groupMode?(selectedIds.includes(s.id)?"Selected":"Add"):"Start"}</div>
-            </button>
-          ))}
-          {groupMode&&selectedIds.length>0&&(
-            <button onClick={startGroup} style={{background:"linear-gradient(135deg,#1a7a40,#0e4d2a)",border:"none",borderRadius:20,padding:"15px",color:"white",fontSize:16,fontWeight:"bold",cursor:"pointer",boxShadow:"0 6px 18px rgba(0,0,0,0.3)"}}>
-              Start class with {selectedIds.length} students
-            </button>
-          )}
-          {!adding?(
-            <button onClick={()=>setAdding(true)} style={{background:"rgba(26,122,64,0.3)",border:"2px dashed rgba(26,122,64,0.6)",borderRadius:20,padding:"14px",color:"#4ade80",fontSize:16,cursor:"pointer",fontWeight:"bold"}}>+ Add Student</button>
-          ):(
-            <div style={{background:"rgba(255,255,255,0.08)",border:"2px solid rgba(255,255,255,0.15)",borderRadius:20,padding:20,display:"flex",flexDirection:"column",gap:10}}>
-              <input value={name} onChange={e=>setName(e.target.value)} placeholder="Child's name" style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"10px 14px",color:"white",fontSize:16,outline:"none"}}/>
-              <input value={age} onChange={e=>setAge(e.target.value)} placeholder="Age" type="number" style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"10px 14px",color:"white",fontSize:16,outline:"none"}}/>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={addStudent} disabled={saving} style={{flex:1,background:"#1a7a40",border:"none",borderRadius:10,color:"white",padding:"10px",fontSize:15,fontWeight:"bold",cursor:"pointer"}}>{saving?"...":"✓ Add"}</button>
-                <button onClick={()=>setAdding(false)} style={{flex:1,background:"rgba(255,255,255,0.1)",border:"none",borderRadius:10,color:"white",padding:"10px",fontSize:15,cursor:"pointer"}}>Cancel</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {students.length>0&&<button onClick={onDashboard} style={{background:"transparent",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"8px 20px",color:"#8dc49a",fontSize:13,cursor:"pointer"}}>📊 Parent Dashboard</button>}
-    </div>
-  );
-}
-
 // ══════════════════════════════════════════════════════════
 //  PARENT BRIEFING
 // ══════════════════════════════════════════════════════════
-function ParentBriefing({ students, onStart }) {
+function ParentBriefing({ students, onStart, onBack }) {
   const classStudents=Array.isArray(students)?students.filter(Boolean):[students].filter(Boolean);
   const primary=classStudents[0]||{};
   const classLabel=classStudents.length>1?`${classStudents.length} students`:primary.name;
   const [notes,setNotes]=useState("");
   const [topics,setTopics]=useState([]);
   const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
   const topicOptions=[
     {key:"arabic",label:"📖 Arabic Letters"},
     {key:"quran",label:"🕌 Quran Recitation"},
@@ -384,26 +315,28 @@ function ParentBriefing({ students, onStart }) {
   const toggle=t=>setTopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
 
   const submit=async()=>{
-    setSaving(true);
+    if(saving) return;
+    setSaving(true);setError("");
     // Build topic string to pass to teacher
     const topicLabels=topics.map(t=>topicOptions.find(o=>o.key===t)?.label.slice(2)).filter(Boolean);
     const combined=[...topicLabels, notes.trim()].filter(Boolean).join(". ");
     try{
-      if(combined) await Promise.all(classStudents.map(s=>api("POST","/noor/parent-notes",{student_id:s.id,notes:combined,focus_topics:topics}).catch(()=>{})));
+      if(combined) await Promise.all(classStudents.map(s=>api("POST","/noor/parent-notes",{student_id:s.id,notes:combined,focus_topics:topics})));
       onStart(combined||null);
-    }catch(e){onStart(null);}
+    }catch(e){setError(e.message);}
     setSaving(false);
   };
 
   return(
     <div style={{background:"linear-gradient(160deg,#051a0d,#0d3320)",minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'Segoe UI',Arial,sans-serif",color:"white",padding:24,gap:20,overflowY:"auto"}}>
+      <button className="noor-back" onClick={onBack} disabled={saving}>← Choose students</button>
       <div style={{textAlign:"center",marginTop:10}}><div style={{fontSize:32}}>📋</div><div style={{fontSize:22,fontWeight:"bold",color:"#f0c060"}}>Today's Lesson</div><div style={{fontSize:14,color:"#a8d8b0",marginTop:4}}>For {classLabel}</div></div>
       <div style={{width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:16}}>
         <div>
           <div style={{fontSize:14,color:"#f0c060",marginBottom:10,fontWeight:"bold"}}>Choose today's topic:</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {topicOptions.map(t=>(
-              <button key={t.key} onClick={()=>toggle(t.key)} style={{
+              <button key={t.key} aria-pressed={topics.includes(t.key)} onClick={()=>toggle(t.key)} style={{
                 background:topics.includes(t.key)?"#1a7a40":"rgba(255,255,255,0.08)",
                 border:`2px solid ${topics.includes(t.key)?"#1a7a40":"rgba(255,255,255,0.15)"}`,
                 borderRadius:14,padding:"12px 10px",color:"white",fontSize:14,cursor:"pointer",
@@ -415,14 +348,15 @@ function ParentBriefing({ students, onStart }) {
         </div>
         <div>
           <div style={{fontSize:13,color:"#8dc49a",marginBottom:8}}>Extra notes for Sheikh Noor: <span style={{color:"#6aaa80"}}>(optional)</span></div>
-          <textarea value={notes} onChange={e=>setNotes(e.target.value)}
+          <textarea aria-label="Notes for the teacher" value={notes} onChange={e=>setNotes(e.target.value)}
             placeholder={classStudents.length>1?`e.g. "Uzair needs help with Ba. Aisha is ready for Tha. Rotate questions."`:`e.g. "${primary.name} struggles with the letter Ain. Please go slowly."`}
             rows={3} style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:14,padding:"12px",color:"white",fontSize:14,outline:"none",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/>
         </div>
+        {error&&<div className="noor-error" role="alert">{error}</div>}
         <button onClick={submit} disabled={saving} style={{background:"linear-gradient(135deg,#1a7a40,#0e4d2a)",border:"none",borderRadius:20,color:"white",padding:"18px",fontSize:18,fontWeight:"bold",cursor:"pointer",boxShadow:"0 6px 24px rgba(0,0,0,0.4)"}}>
           {saving?"Starting...":classStudents.length>1?"Start Group Class":`Start ${primary.name}'s Class`}
         </button>
-        <button onClick={()=>onStart(null)} style={{background:"transparent",border:"none",color:"#6aaa80",fontSize:13,cursor:"pointer",textAlign:"center"}}>Skip — Let teacher decide</button>
+        <button disabled={saving} onClick={()=>onStart(null)} style={{background:"transparent",border:"none",color:"#6aaa80",fontSize:13,cursor:"pointer",textAlign:"center"}}>Skip — Let teacher decide</button>
       </div>
     </div>
   );
@@ -1243,7 +1177,7 @@ function Dashboard({ students, onBack }) {
           </div>
           <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:16}}>
             <div style={{fontSize:14,fontWeight:"bold",color:"#f0c060",marginBottom:10}}>✏️ Notes for Next Class</div>
-            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder={`Notes for Sheikh Noor about ${s?.name}'s next lesson...`} rows={3}
+            <textarea aria-label="Notes for the teacher" value={notes} onChange={e=>setNotes(e.target.value)} placeholder={`Notes for Sheikh Noor about ${s?.name}'s next lesson...`} rows={3}
               style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:12,padding:"10px 12px",color:"white",fontSize:13,outline:"none",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/>
             <button onClick={saveNotes} disabled={saving||!notes.trim()} style={{marginTop:8,background:"#1a7a40",border:"none",borderRadius:10,color:"white",padding:"8px 20px",fontSize:13,fontWeight:"bold",cursor:"pointer",opacity:notes.trim()?1:0.5}}>{saving?"Saving...":"Save"}</button>
           </div>
@@ -1280,7 +1214,7 @@ export default function App() {
   const [parentNotes,setParentNotes]=useState(null);
   const [students,setStudents]=useState([]);
   useEffect(()=>{api("GET","/noor/students").then(setStudents).catch(()=>{});},[screen]);
-  if(screen==="briefing"&&classStudents.length) return <ParentBriefing students={classStudents} onStart={n=>{setParentNotes(n);setScreen("class");}}/>;
+  if(screen==="briefing"&&classStudents.length) return <ParentBriefing students={classStudents} onBack={()=>setScreen("select")} onStart={n=>{setParentNotes(n);setScreen("class");}}/>;
   if(screen==="class"&&classStudents.length) return <Classroom students={classStudents} parentNotes={parentNotes} onBack={()=>setScreen("select")}/>;
   if(screen==="dashboard") return <Dashboard students={students} onBack={()=>setScreen("select")}/>;
   return <StudentSelect onSelect={picked=>{setClassStudents(Array.isArray(picked)?picked:[picked]);setScreen("briefing");}} onDashboard={()=>setScreen("dashboard")}/>;
