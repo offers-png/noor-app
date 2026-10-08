@@ -1,4 +1,25 @@
-# Mobile content delivery — Android 1.0.2 (3)
+# Mobile content delivery — Android 1.0.3 (4)
+
+## What changed in 1.0.3
+
+The screenshots that prompted this update ("Configure EXPO_PUBLIC_CONTENT_PROXY_URL", "Lessons awaiting review", "A licensed transliteration has not been downloaded", "A reviewed explanation is not available") come from the original 1.0.0 build. Those messages were removed in 1.0.1/1.0.2. Install a build made from this version to see the current behaviour.
+
+| Feature | 1.0.3 behaviour | Status |
+| --- | --- | --- |
+| Content server | EAS `preview`/`production` builds default to `https://issa-uzair.netlify.app/content` (the production `content` function on `main`). Parents can still replace it. A saved address takes precedence, so a device that saved the old `deploy-preview-6` address should switch to this one. | Deployed function confirmed through the Netlify API. HTTP reachability not checked from the build environment (egress blocked). |
+| Recitation for all 114 surahs | No Quran Foundation account needed. Parent picks a surah → **Check download size** (proxy returns the verified Al Quran Cloud `ar.alafasy` list; the app checks exact file sizes with HEAD or a one-byte range request) → **Confirm** → native download with free-space check, progress, cancellation, resume and size verification → reader plays from the device offline. Remove per surah. Lists refresh weekly. | Proxy → storage → size → transfer → reader tested in-process with real SQLite and the real proxy handler. **Live publisher/CDN and on-device download not verified.** |
+| Quran Foundation audio, tafsir, translations | Unchanged pipeline, now grouped under "Quran Foundation resources (optional)". | Needs approved `QF_CLIENT_ID`/`QF_CLIENT_SECRET` on the server. **Not verified end to end.** |
+| Tafsir for children | Labeled "Explanation (tafsir)", explained as different from translation, shown two paragraphs at a time without changing wording. | No credential-free authorized English tafsir exists (see below). |
+| Duas and lessons | 9 new review-gated drafts: 4 Qur'anic duas (2:201, 17:24, 20:114, 25:74), Five prayers through the day, Getting ready to pray, Six things we believe in, Greeting with Salam, Kindness to parents. All ship `needs_review` and stay hidden in normal Kids Mode until a parent records a named qualified reviewer and publishes. | Tested. **Requires your qualified reviewer before children see them.** |
+| Arabic | Numbers 1–10 module with quiz; five more simple words. | Tested. |
+
+Qur'anic dua Arabic and transliteration are exact excerpts of the Tanzil files; a test compares them with the original publisher bytes. Their English line is an original **simple-meaning summary**, labeled "not a translation of the Qur'an", and is part of what the reviewer approves. The transliteration remains under Tanzil's noncommercial terms.
+
+Recitation rights: [Al Quran Cloud terms](https://alquran.cloud/terms-and-conditions), section IV: recitations "may stream, embed and download them for personal and educational use", may be bundled into a commercial product, reciters keep copyright and may request removal. Section III asks clients to cache. The retained copy is `src/content/fixtures/quran-audio-license.html`.
+
+---
+
+## Previous release notes (1.0.2)
 
 This update preserves the Expo Router/SQLite architecture, design, PIN controls, profiles, bookmarks, progress, and five existing offline surahs. No API secret is accepted or bundled in the mobile app.
 

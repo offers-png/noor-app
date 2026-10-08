@@ -21,28 +21,45 @@ export function assertAudioDownloadUrl(url:string):void {
   const parsed = new URL(url);
   if(parsed.protocol!=='https:' || parsed.username || parsed.password || parsed.hostname==='localhost' || /^[\d.]+$/.test(parsed.hostname) || parsed.hostname.includes(':') || parsed.hostname.endsWith('.local'))throw new QuranProviderError('Recitation downloads require a public HTTPS source URL.');
 }
-export async function estimateAudioDownloads(plan: QuranAudioDownload[], networkAllowed:()=>boolean, fetcher:typeof fetch=fetch, signal?:AbortSignal): Promise<{files:QuranAudioDownload[];totalBytes:number}> {
-  if(!plan.length)throw new QuranProviderError('No recordings are available for this selection. Sync recitation metadata first.');
-  let totalBytes=0;
-  const files:QuranAudioDownload[]=[];
-  for(const file of plan){
-    if(!networkAllowed()||signal?.aborted)throw new QuranProviderError('Network access is disabled or the size check was cancelled.');
-    assertAudioDownloadUrl(file.url);
-    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);
-    const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
-    const monitor=setInterval(()=>{if(!networkAllowed())controller.abort();},250);
-    try {
-      const response=await fetcher(file.url,{method:'HEAD',signal:controller.signal});
-      const bytes=Number(response.headers.get('content-length'));
-      if(!networkAllowed()||signal?.aborted)throw new QuranProviderError('The size check was cancelled. Enable network access to try again.');
-      if(!response.ok || !Number.isSafeInteger(bytes) || bytes<=0 || /(?:text\/html|application\/json)/i.test(response.headers.get('content-type')??''))throw new QuranProviderError(`The source did not provide a reliable size for ${file.verseKey}; no audio will be downloaded.`);
-      files.push({...file,bytes});totalBytes+=bytes;
-      if(!Number.isSafeInteger(totalBytes))throw new QuranProviderError('The audio size estimate is invalid. No download started.');
-    } catch(error) {
-      if(error instanceof QuranProviderError)throw error;
-      throw new QuranProviderError(!networkAllowed()||signal?.aborted?'The size check was cancelled. Enable network access to try again.':'Audio sizes could not be checked. Check your connection and try again.');
-    } finally {clearTimeout(timer);clearInterval(monitor);signal?.removeEventListener('abort',abort);}
+/** Prefer HEAD; fall back to a one-byte range request when a CDN omits Content-Length on HEAD. */
+async function sourceBytes(fetcher:typeof fetch,url:string,signal:AbortSignal):Promise<{ok:boolean;bytes:number;type:string}> {
+  const head=await fetcher(url,{method:'HEAD',signal});
+  const type=head.headers.get('content-type')??'';
+  const bytes=Number(head.headers.get('content-length'));
+  if(head.ok&&Number.isSafeInteger(bytes)&&bytes>0)return {ok:true,bytes,type};
+  const range=await fetcher(url,{headers:{Range:'bytes=0-0'},signal});
+  try{await range.body?.cancel();}catch{/* Only the headers are needed. */}
+  const total=Number(/\/(\d+)\s*$/.exec(range.headers.get('content-range')??'')?.[1]);
+  return {ok:range.status===206,bytes:total,type:range.headers.get('content-type')??type};
+}
+export async function estimateAudioDownloads(plan: QuranAudioDownload[], networkAllowed:()=>boolean, fetcher:typeof fetch=fetch, signal?:AbortSignal, concurrency=6): Promise<{files:QuranAudioDownload[];totalBytes:number}> {
+  if(!plan.length)throw new QuranProviderError('No recordings are available for this selection yet. Get the recitation list first.');
+  const files:QuranAudioDownload[]=new Array(plan.length);
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),Math.max(20000,plan.length*2000));
+  const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
+  const monitor=setInterval(()=>{if(!networkAllowed())controller.abort();},250);
+  let next=0;let failure:QuranProviderError|undefined;
+  async function worker(){
+    while(!failure&&next<plan.length){
+      const index=next++;const file=plan[index];
+      try {
+        if(!networkAllowed()||signal?.aborted)throw new QuranProviderError('Network access is disabled or the size check was cancelled.');
+        assertAudioDownloadUrl(file.url);
+        const result=await sourceBytes(fetcher,file.url,controller.signal);
+        if(!networkAllowed()||signal?.aborted)throw new QuranProviderError('The size check was cancelled. Enable network access to try again.');
+        if(!result.ok || !Number.isSafeInteger(result.bytes) || result.bytes<=0 || /(?:text\/html|application\/json)/i.test(result.type))throw new QuranProviderError(`The source did not provide a reliable size for ${file.verseKey}; no audio will be downloaded.`);
+        files[index]={...file,bytes:result.bytes};
+      } catch(error) {
+        failure??=error instanceof QuranProviderError?error:new QuranProviderError(!networkAllowed()||signal?.aborted?'The size check was cancelled. Enable network access to try again.':'Audio sizes could not be checked. Check your connection and try again.');
+        controller.abort();
+      }
+    }
   }
+  try { await Promise.all(Array.from({length:Math.max(1,Math.min(concurrency,plan.length))},worker)); }
+  finally {clearTimeout(timer);clearInterval(monitor);signal?.removeEventListener('abort',abort);}
+  if(failure)throw failure;
+  const totalBytes=files.reduce((sum,file)=>sum+file.bytes!,0);
+  if(!Number.isSafeInteger(totalBytes))throw new QuranProviderError('The audio size estimate is invalid. No download started.');
   return {files,totalBytes};
 }
 async function nativeAudioRuntime():Promise<AudioDownloadRuntime>{

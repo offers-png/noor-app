@@ -70,7 +70,7 @@ test('Sunnah errors reject wrong references, missing Arabic, insecure production
 
 test('review approval requires an exact reviewer attestation and separate explicit family publication', () => {
   assert.equal(visibleLessons(allLessons, false).length, 0);
-  assert.equal(visibleLessons(allLessons, true).length, 13);
+  assert.equal(visibleLessons(allLessons, true).length, 22);
   const review = { ...allLessons[0].review, status: 'published' as const, reviewer: 'Reviewer named by parent', approvedAt: '2026-10-07', approvedVersion: '1', reviewedContentHash: reviewContentHash(allLessons[0]),
     attestation: { kind: 'parent-entered' as const, qualificationConfirmed: true as const, recordedAt: '2026-10-07' },
     publication: { kind: 'parent-local' as const, version: '1', publishedAt: '2026-10-08', parentSuitabilityConfirmed: true as const, sourcePermissionConfirmed: true as const } };
@@ -87,8 +87,8 @@ test('review approval requires an exact reviewer attestation and separate explic
 });
 
 test('religious fixtures carry provenance, excerpt scope, separate original commentary and review status', () => {
-  assert.equal(hadithFixtures.length, 3); assert.equal(duaFixtures.length, 5);
-  for (const record of [...hadithFixtures, ...duaFixtures]) {
+  assert.equal(hadithFixtures.length, 3); assert.equal(duaFixtures.length, 9);
+  for (const record of [...hadithFixtures, ...duaFixtures.filter(dua => !dua.verseKey)]) {
     assert.ok(record.canonicalText.length); assert.ok(record.source.sourceReference); assert.ok(record.source.sourceUrl.startsWith('https://sunnah.com/'));
     assert.ok(record.source.license.includes('permitted')); assert.equal(record.source.verifiedAt, '2026-10-07');
   }
@@ -134,8 +134,8 @@ test('offline review lesson seeding is idempotent and keeps sourced Arabic separ
   const { db, close } = localDb();
   try {
     await db.execAsync(schema); await seedReviewLessons(db); await seedReviewLessons(db);
-    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM lessons'))?.count, 13);
-    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM duas'))?.count, 5);
+    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM lessons'))?.count, 22);
+    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM duas'))?.count, 9);
     assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM hadith_lessons'))?.count, 3);
     const source = await db.getFirstAsync<{ canonical_text: string }>('SELECT canonical_text FROM hadiths WHERE id = ?', hadithFixtures[0].id);
     assert.equal(source?.canonical_text, hadithFixtures[0].canonicalText);

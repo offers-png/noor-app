@@ -1,7 +1,14 @@
 {
   "cli": { "version": ">= 18.0.0" },
   "build": {
-    "preview": { "distribution": "internal", "android": { "buildType": "apk" } },
-    "production": { "android": { "buildType": "app-bundle" } }
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_CONTENT_PROXY_URL": "https://issa-uzair.netlify.app/content", "EXPO_PUBLIC_QF_ENV": "production" }
+    },
+    "production": {
+      "android": { "buildType": "app-bundle" },
+      "env": { "EXPO_PUBLIC_CONTENT_PROXY_URL": "https://issa-uzair.netlify.app/content", "EXPO_PUBLIC_QF_ENV": "production" }
+    }
   }
 }

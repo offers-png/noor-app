@@ -81,6 +81,12 @@ export interface DuaRecord {
   readonly textScope: 'excerpt' | 'supplication';
   readonly audioUri: string | null;
   readonly review: ContentReview;
+  /** Qur'anic supplications point to their ayah so the reader can open it. */
+  readonly verseKey?: string;
+  /** Tanzil transliteration keeps its publisher <b>/<u> markup; the UI formats it without rewriting. */
+  readonly transliterationFormat?: 'plain' | 'tanzil-markup';
+  /** A learning summary is original wording that needs review; it is never labeled a translation. */
+  readonly translationKind?: 'published' | 'learning-summary';
 }
 
 /** Published source selections are distinct from our editable education lessons. */

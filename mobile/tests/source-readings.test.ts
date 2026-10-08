@@ -30,7 +30,7 @@ test('normal mode has eight offline source readings while unapproved explanation
   assert.equal(sourceReadings('hadith').length, 3);
   assert.equal(sourceReadings('duas').length, 5);
   assert.equal(visibleLessons(allLessons, false).length, 0);
-  assert.equal(visibleLessons(allLessons, true).length, 13);
+  assert.equal(visibleLessons(allLessons, true).length, 22);
   for (const record of sourceReadingCatalog) {
     assert.equal('sections' in record, false); assert.equal('quiz' in record, false);
     assert.equal('review' in record, false); assert.equal('discussion' in record, false);
@@ -51,7 +51,7 @@ test('the editorial entry stays hidden normally and parent opt-in seeds and expo
     assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM lessons'))?.count, 0);
     assert.equal(await hasAvailableEditorialLessons(db, 'hadith', true), true);
     assert.equal(await hasAvailableEditorialLessons(db, 'duas', true), true);
-    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM lessons'))?.count, 13);
+    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM lessons'))?.count, 22);
     assert.equal(await hasAvailableEditorialLessons(db, 'hadith', false), false);
   } finally { close(); }
 });

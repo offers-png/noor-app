@@ -92,11 +92,56 @@ export const islamLessons: EducationLesson[] = [
       { title: 'Educational reflection', body: 'We can ask Allah for help and forgiveness. Learn the passage with an adult.', kind: 'explanation' },
       { title: 'Together activity', body: 'Tell your parent one way you can ask for help when you make a mistake.', kind: 'activity' }],
     discussion: 'Who can you ask for help when you feel worried?', quiz: [] },
+  { id: 'islam-prayer-times', category: 'islam', title: 'Five prayers through the day', subtitle: 'From dawn to night', topic: 'Salah', source: prayerTimesSource, review: reviewDraft(), stepByStep: true,
+    sections: [
+      { title: 'Fajr', body: 'Fajr is prayed at dawn, after the first light of morning and before the sun rises.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
+      { title: 'Dhuhr', body: 'Dhuhr is prayed after midday, once the sun has passed its highest point.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
+      { title: 'Asr', body: 'Asr is prayed in the afternoon.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
+      { title: 'Maghrib', body: 'Maghrib is prayed just after the sun sets.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
+      { title: 'Isha', body: 'Isha is prayed at night, after the evening twilight has gone.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
+      { title: 'Make a prayer chart', body: 'With your adult, find today’s prayer times for your town from your local masjid. Draw the sun moving across the sky and mark each prayer on it.', kind: 'activity' },
+    ], discussion: 'Which prayer is closest to when you wake up? Which is closest to bedtime?', quiz: [
+      { id: 'prayer-times-order', type: 'order', prompt: 'Put the five prayers in order, starting at dawn.', items: [{ id: 'fajr', label: 'Fajr' }, { id: 'dhuhr', label: 'Dhuhr' }, { id: 'asr', label: 'Asr' }, { id: 'maghrib', label: 'Maghrib' }, { id: 'isha', label: 'Isha' }], correctOrder: ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'], explanation: 'Fajr, Dhuhr, Asr, Maghrib, then Isha.', sourceReference: prayerTimesSource.sourceReference },
+      question('prayer-times-maghrib', 'Which prayer comes just after sunset?', 'Maghrib', ['Fajr', 'Dhuhr'], prayerTimesSource.sourceReference)] },
+  { id: 'islam-prayer-ready', category: 'islam', title: 'Getting ready to pray', subtitle: 'Wudu • Qiblah • A calm start', topic: 'Salah', source: quranReference("Qur'an 5:6", '5/6'), review: reviewDraft(), stepByStep: true,
+    sections: [
+      { title: 'Wudu first', body: 'Allah tells the believers to wash for prayer. This washing is called wudu.', kind: 'source_fact', sourceReference: "Qur'an 5:6", illustration: 'hands' },
+      { title: 'Face the Qiblah', body: 'Muslims face the Sacred Mosque in Makkah when they pray. This direction is called the Qiblah.', kind: 'source_fact', sourceReference: qiblahSource.sourceReference, illustration: 'mosque' },
+      { title: 'Pray calmly', body: 'The Prophet ﷺ taught a man to pray calmly and not rush, staying still in each position.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'standing' },
+      { title: 'Get ready together', body: 'Ask your adult to show you your family’s prayer space and how you get your clothes and place ready.', kind: 'activity', illustration: 'standing' },
+    ], discussion: 'What helps you feel calm before you start to pray?', quiz: [
+      question('prayer-ready-wudu', 'What washing do we do before prayer?', 'Wudu', ['Bathing the dog', 'Washing the car'], "Qur'an 5:6"),
+      question('prayer-ready-qiblah', 'What is the Qiblah?', 'The direction of the Sacred Mosque in Makkah', ['A kind of food', 'A prayer time'], qiblahSource.sourceReference)] },
+  { id: 'islam-six-beliefs', category: 'islam', title: 'Six things we believe in', subtitle: 'The pillars of faith (iman)', topic: 'Allah', source: sunnahSource('Sahih Muslim 8', 'muslim:8'), review: reviewDraft(),
+    sections: [
+      { title: 'What is iman?', body: 'In a famous hadith, the angel Jibril asked the Prophet ﷺ about iman (faith). The answer named six things to believe in.', kind: 'source_fact', sourceReference: 'Sahih Muslim 8' },
+      { title: 'The six', body: 'Believe in Allah, His angels, His books, His messengers, the Last Day, and in Allah’s decree (qadar), the good and the bad.', kind: 'source_fact', sourceReference: 'Sahih Muslim 8' },
+      { title: 'Learn one at a time', body: 'Choose one of the six with your adult this week and learn something about it together, such as the books Allah sent.', kind: 'activity' },
+    ], discussion: 'Which of the six would you like to learn more about first?', quiz: [
+      question('iman-count', 'How many pillars of faith are named in this hadith?', 'Six', ['Two', 'Ten'], 'Sahih Muslim 8'),
+      question('iman-angels', 'Which of these is one of the six?', 'Belief in Allah’s angels', ['Belief in lucky charms', 'Belief in fortune tellers'], 'Sahih Muslim 8')] },
+  { id: 'islam-salam', category: 'islam', title: 'Greeting with Salam', subtitle: 'Spreading peace with our words', topic: 'Islamic Manners', source: quranReference("Qur'an 4:86", '4/86'), review: reviewDraft(),
+    sections: [
+      { title: 'The greeting', body: 'Muslims greet each other with “As-salamu alaykum”, which means “peace be upon you”.', kind: 'explanation' },
+      { title: 'The reply', body: 'The reply is “Wa alaykum as-salam”, which means “and upon you be peace”.', kind: 'explanation' },
+      { title: 'Reply in a good way', body: 'Allah tells us that when we are greeted, we should reply with a better greeting or at least the same.', kind: 'source_fact', sourceReference: "Qur'an 4:86" },
+      { title: 'Try it today', body: 'Greet each person in your family with salam today, and reply when they greet you.', kind: 'activity' },
+    ], discussion: 'How do you feel when someone greets you kindly?', quiz: [
+      question('salam-reply', 'Someone says “As-salamu alaykum”. What can you reply?', 'Wa alaykum as-salam', ['Go away', 'Nothing at all'], "Qur'an 4:86")] },
+  { id: 'islam-parents', category: 'islam', title: 'Kindness to parents', subtitle: 'Gentle words and helpful hands', topic: 'Parents', source: quranReference("Qur'an 17:23–24", '17/23'), review: reviewDraft(),
+    sections: [
+      { title: 'A command from Allah', body: 'Allah commands us to be good to our parents.', kind: 'source_fact', sourceReference: "Qur'an 17:23" },
+      { title: 'Gentle words', body: 'We speak to our parents with respect, and do not even say “uff” to show we are annoyed.', kind: 'source_fact', sourceReference: "Qur'an 17:23" },
+      { title: 'Pray for them', body: 'The next ayah teaches us to ask Allah to have mercy on our parents, as they cared for us when we were small. You can learn this dua in Duas.', kind: 'source_fact', sourceReference: "Qur'an 17:24" },
+      { title: 'Helping hands', body: 'Choose one helpful thing to do at home today without being asked.', kind: 'activity' },
+    ], discussion: 'What is one kind thing your parents do for you? How can you thank them?', quiz: [
+      question('parents-words', 'How should we speak to our parents?', 'Gently and with respect', ['Rudely', 'By shouting'], "Qur'an 17:23")] },
 ];
 
 export const duaLessons: EducationLesson[] = duaFixtures.map(dua => ({ id: dua.id, category: 'duas', title: dua.title,
   subtitle: `${dua.category} • Read and memorize`, topic: dua.category, source: dua.source, review: dua.review, duaId: dua.id,
-  sections: [{ title: 'Learn together', body: 'Read the Arabic with a parent or teacher. Transliteration is a reading aid and does not replace learning pronunciation.', kind: 'activity' }],
+  sections: [{ title: 'Learn together', body: 'Read the Arabic with a parent or teacher. Transliteration is a reading aid and does not replace learning pronunciation.', kind: 'activity' },
+    ...(dua.verseKey ? [{ title: 'Find it in the Qur’an', body: `This supplication is in the Qur’an at ${dua.verseKey}. Read the whole ayah and a published translation together in the Qur’an reader.`, kind: 'activity' as const, sourceReference: `Qur'an ${dua.verseKey}` }] : [])],
   discussion: 'Choose one short phrase to practice together today.', quiz: [] }));
 
 export const allLessons: EducationLesson[] = [...hadithLessons, ...islamLessons, ...duaLessons]
