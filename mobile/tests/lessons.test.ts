@@ -310,3 +310,37 @@ test('review fingerprints reject changed teaching or ages even if a stale import
     assert.equal(reviewContentHash(reordered), published.review.reviewedContentHash);
   } finally { close(); }
 });
+
+test('parent authorization revoked during awaited writes rolls back approval and publication', async () => {
+  for (const action of ['approve', 'publish'] as const) {
+    const { db, close } = localDb();
+    let authorized = true;
+    let expireDuringWrite = false;
+    const guarded: Database = { ...db, withTransactionAsync: work => db.withTransactionAsync(async transaction => {
+      await work({ ...transaction, runAsync: async (sql, ...params) => {
+        const result = await transaction.runAsync(sql, ...params);
+        if (expireDuringWrite && sql.startsWith('UPDATE hadith_lessons')) {
+          await Promise.resolve();
+          authorized = false;
+        }
+        return result;
+      } });
+    }) };
+    try {
+      await db.execAsync(schema);
+      const repository = new LessonReviewRepository(guarded, () => authorized);
+      await repository.list();
+      if (action === 'publish') await repository.approve('hadith-1', '1', 'Reviewer named by parent', true);
+      const before = await db.getFirstAsync('SELECT status,payload_json FROM lessons WHERE id=?', 'hadith-1');
+      const hadithBefore = await db.getFirstAsync('SELECT status,payload_json FROM hadith_lessons WHERE id=?', 'hadith-1');
+      expireDuringWrite = true;
+      await assert.rejects(action === 'approve'
+        ? repository.approve('hadith-1', '1', 'Reviewer named by parent', true)
+        : repository.publish('hadith-1', '1', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }), /Unlock Parent Mode/);
+      assert.equal(authorized, false);
+      assert.deepEqual(await db.getFirstAsync('SELECT status,payload_json FROM lessons WHERE id=?', 'hadith-1'), before);
+      assert.deepEqual(await db.getFirstAsync('SELECT status,payload_json FROM hadith_lessons WHERE id=?', 'hadith-1'), hadithBefore);
+      assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
+    } finally { close(); }
+  }
+});

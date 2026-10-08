@@ -143,7 +143,7 @@ export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEna
       <PublishedMeaning ayah={selected}/>
       {selected.tafsir&&<Tafsir layer={selected.tafsir} fontSize={fontSize}/>}
       {!selected.tafsir&&<Text style={styles.muted}>For a fuller explanation, read with a parent or teacher. A parent can add a published tafsir when one is available.</Text>}
-      {!selected.publishedMeaning&&!selected.tafsir&&<Text style={styles.muted}>Additional published meaning and notes are unavailable for this ayah. Read its attributed translation with a parent or teacher.</Text>}
+      {!selected.publishedMeaning&&!selected.tafsir&&<Text style={styles.muted}>{selected.translation?'Read the attributed translation with a parent or teacher.':'Ask a parent to add a published translation, or read the Arabic together with a teacher.'}</Text>}
       <View style={styles.row}><Button label="Word by word" onPress={()=>setView('words')}/><Button label="Memorize" secondary onPress={()=>{setMemorizeEndKey(selected.key);setView('memorize');}}/><Button label={bookmarks.includes(selected.key)?'Remove bookmark':'Bookmark'} secondary onPress={()=>void bookmark(selected)}/></View>
       <View style={styles.row}><Button label="Previous ayah" secondary disabled={selected.ayahNumber<=1} onPress={()=>setSelected(ayahs[selected.ayahNumber-2])}/><Button label="Next ayah" secondary disabled={selected.ayahNumber>=ayahs.length} onPress={()=>setSelected(ayahs[selected.ayahNumber])}/></View>
     </View>}
