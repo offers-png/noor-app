@@ -1,0 +1,42 @@
+name: Kids Islam Android APK
+on:
+  workflow_dispatch:
+  push:
+    paths: ['mobile/**', '.github/workflows/mobile-apk.yml']
+permissions:
+  contents: read
+concurrency:
+  group: mobile-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      # Public, non-secret build configuration (same values as eas.json).
+      EXPO_PUBLIC_CONTENT_PROXY_URL: https://issa-uzair.netlify.app/content
+      EXPO_PUBLIC_QF_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      # Test-signed release build for direct installation on ARM64 phones.
+      - run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+        working-directory: mobile/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kids-islam-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
