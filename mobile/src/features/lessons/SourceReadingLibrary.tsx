@@ -42,7 +42,7 @@ export function SourceReadingLibrary({ category, childId, fontSize, networkAllow
   const loadSaved = useCallback(async () => childId ? new SourceReadingRepository(await getDb()).savedIds(childId, category) : [], [childId, category]);
   useFocusEffect(useCallback(() => {
     const version = ++session.current;
-    setFocused(true); setLoadingSaved(true);
+    setFocused(true); setLoadingSaved(true); setBusy(lock.current);
     void loadSaved().then(ids => { if (session.current === version) setSavedIds(ids); })
       .catch(() => { if (session.current === version) setMessage('Saved readings could not be loaded. You can still read every selection.'); })
       .finally(() => { if (session.current === version) setLoadingSaved(false); });
