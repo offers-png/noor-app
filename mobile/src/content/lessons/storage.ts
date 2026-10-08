@@ -47,14 +47,14 @@ export async function loadStoredLessons(db: Database): Promise<EducationLesson[]
 }
 
 export async function seedReviewLessons(db: Database): Promise<void> {
-  await db.withTransactionAsync(async () => {
-    for (const source of lessonSourceRegistry) await db.runAsync('INSERT OR IGNORE INTO content_sources(id,payload_json) VALUES (?,?)', source.sourceReference, JSON.stringify(source));
-    for (const hadith of hadithFixtures) await db.runAsync('INSERT OR IGNORE INTO hadiths(id,canonical_text,source_json,payload_json) VALUES (?,?,?,?)', hadith.id, hadith.canonicalText, JSON.stringify(hadith.source), JSON.stringify(hadith));
-    for (const dua of duaFixtures) await db.runAsync('INSERT OR IGNORE INTO duas(id,payload_json,source_json) VALUES (?,?,?)', dua.id, JSON.stringify(dua), JSON.stringify(dua.source));
+  await db.withTransactionAsync(async tx => {
+    for (const source of lessonSourceRegistry) await tx.runAsync('INSERT OR IGNORE INTO content_sources(id,payload_json) VALUES (?,?)', source.sourceReference, JSON.stringify(source));
+    for (const hadith of hadithFixtures) await tx.runAsync('INSERT OR IGNORE INTO hadiths(id,canonical_text,source_json,payload_json) VALUES (?,?,?,?)', hadith.id, hadith.canonicalText, JSON.stringify(hadith.source), JSON.stringify(hadith));
+    for (const dua of duaFixtures) await tx.runAsync('INSERT OR IGNORE INTO duas(id,payload_json,source_json) VALUES (?,?,?)', dua.id, JSON.stringify(dua), JSON.stringify(dua.source));
     for (const lesson of allLessons) {
-      await db.runAsync('INSERT OR IGNORE INTO lessons(id,category,status,payload_json,source_json) VALUES (?,?,?,?,?)', lesson.id, lesson.category, lesson.review.status, JSON.stringify(lesson), JSON.stringify(lesson.source));
-      if (lesson.hadithId) await db.runAsync('INSERT OR IGNORE INTO hadith_lessons(id,hadith_id,status,payload_json) VALUES (?,?,?,?)', lesson.id, lesson.hadithId, lesson.review.status, JSON.stringify(lesson));
-      for (const quiz of lesson.quiz) await db.runAsync('INSERT OR IGNORE INTO quiz_questions(id,lesson_id,payload_json) VALUES (?,?,?)', quiz.id, lesson.id, JSON.stringify(quiz));
+      await tx.runAsync('INSERT OR IGNORE INTO lessons(id,category,status,payload_json,source_json) VALUES (?,?,?,?,?)', lesson.id, lesson.category, lesson.review.status, JSON.stringify(lesson), JSON.stringify(lesson.source));
+      if (lesson.hadithId) await tx.runAsync('INSERT OR IGNORE INTO hadith_lessons(id,hadith_id,status,payload_json) VALUES (?,?,?,?)', lesson.id, lesson.hadithId, lesson.review.status, JSON.stringify(lesson));
+      for (const quiz of lesson.quiz) await tx.runAsync('INSERT OR IGNORE INTO quiz_questions(id,lesson_id,payload_json) VALUES (?,?,?)', quiz.id, lesson.id, JSON.stringify(quiz));
     }
   });
 }

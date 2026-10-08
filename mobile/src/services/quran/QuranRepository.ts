@@ -7,11 +7,21 @@ import { verseIdForReference } from './QuranNavigation';
 import { sourcedWordTimings } from './QuranTiming';
 import { readQuranResourcePreferences, selectActiveQuranResource, type QuranResourcePreferences } from './QuranResourcePreferences';
 
-export async function seedQuran(db: Database): Promise<void> {
-  await db.withTransactionAsync(async () => {
-    for (const surah of ALL_SURAHS) await db.runAsync('INSERT OR IGNORE INTO surahs(number,payload_json) VALUES (?,?)', surah.number, JSON.stringify(surah));
-    for (const ayah of SEEDED_AYAHS) await db.runAsync('INSERT OR IGNORE INTO ayahs(verse_key,surah_number,ayah_number,canonical_text,source_json,payload_json) VALUES (?,?,?,?,?,?)', ayah.key, ayah.surahNumber, ayah.ayahNumber, ayah.canonicalText, JSON.stringify(ayah.source), JSON.stringify(ayah));
+const seedOperations = new WeakMap<Database, Promise<void>>();
+
+/** Share one initialization transaction across every repository using the same connection. */
+export function seedQuran(db: Database): Promise<void> {
+  const existing = seedOperations.get(db);
+  if (existing) return existing;
+  const operation = Promise.resolve().then(() => db.withTransactionAsync(async tx => {
+    for (const surah of ALL_SURAHS) await tx.runAsync('INSERT OR IGNORE INTO surahs(number,payload_json) VALUES (?,?)', surah.number, JSON.stringify(surah));
+    for (const ayah of SEEDED_AYAHS) await tx.runAsync('INSERT OR IGNORE INTO ayahs(verse_key,surah_number,ayah_number,canonical_text,source_json,payload_json) VALUES (?,?,?,?,?,?)', ayah.key, ayah.surahNumber, ayah.ayahNumber, ayah.canonicalText, JSON.stringify(ayah.source), JSON.stringify(ayah));
+  })).catch((error: unknown) => {
+    seedOperations.delete(db);
+    throw error;
   });
+  seedOperations.set(db, operation);
+  return operation;
 }
 
 export class SQLiteQuranSyncStore implements SyncStore {
@@ -29,20 +39,20 @@ export class SQLiteQuranSyncStore implements SyncStore {
     return rows.map(r => JSON.parse(r.payload_json) as ResourceSnapshot);
   }
   async commit(environment: string, resources: Map<string,ResourceSnapshot | null>, state: QuranSyncState): Promise<void> {
-    await this.db.withTransactionAsync(async () => {
+    await this.db.withTransactionAsync(async tx => {
       for (const [key, resource] of resources) {
         const [group,id] = key.split(':');
         const scoped = `qf:${environment}:${group}`;
         if (!resource) {
-          await this.db.runAsync('DELETE FROM quran_resources WHERE resource=? AND resource_id=?', scoped, id);
-          await this.db.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', scoped, id, '', state.lastSync, null, 'unavailable');
+          await tx.runAsync('DELETE FROM quran_resources WHERE resource=? AND resource_id=?', scoped, id);
+          await tx.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', scoped, id, '', state.lastSync, null, 'unavailable');
         } else {
           const version = `${resource.schema_version}:${resource.sync_sequence}`;
-          await this.db.runAsync('INSERT OR REPLACE INTO quran_resources(resource,resource_id,version,payload_json) VALUES (?,?,?,?)', scoped, id, version, JSON.stringify(resource));
-          await this.db.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', scoped, id, version, state.lastSync, null, 'complete');
+          await tx.runAsync('INSERT OR REPLACE INTO quran_resources(resource,resource_id,version,payload_json) VALUES (?,?,?,?)', scoped, id, version, JSON.stringify(resource));
+          await tx.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', scoped, id, version, state.lastSync, null, 'complete');
         }
       }
-      await this.db.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', `filter:${environment}`, state.filter, '1', state.lastSync, state.syncToken, state.status);
+      await tx.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', `filter:${environment}`, state.filter, '1', state.lastSync, state.syncToken, state.status);
     });
   }
 }
@@ -52,9 +62,8 @@ function qfSource(resource: ResourceSnapshot, reference: string): QuranSource {
 }
 
 export class QuranRepository {
-  private initialized = false;
   constructor(private readonly dbFactory: () => Promise<Database> = async () => (await import('../database/database')).getDb(), private readonly environment = 'production') {}
-  private async db(): Promise<Database> { const db = await this.dbFactory(); if (!this.initialized) { await seedQuran(db); this.initialized = true; } return db; }
+  private async db(): Promise<Database> { const db = await this.dbFactory(); await seedQuran(db); return db; }
   async chapters(): Promise<Surah[]> {
     const db = await this.db();
     const chapters = (await db.getAllAsync<{payload_json:string}>('SELECT payload_json FROM surahs ORDER BY number')).map(s => JSON.parse(s.payload_json) as Surah);

@@ -26,7 +26,7 @@ function localDb() {
     runAsync: async (sql, ...params: SqlValue[]) => { const result = sqlite.prepare(sql).run(...params); return { changes: Number(result.changes), lastInsertRowId: Number(result.lastInsertRowid) }; },
     getFirstAsync: async <T>(sql: string, ...params: SqlValue[]) => (sqlite.prepare(sql).get(...params) as T) ?? null,
     getAllAsync: async <T>(sql: string, ...params: SqlValue[]) => sqlite.prepare(sql).all(...params) as T[],
-    withTransactionAsync: async work => { sqlite.exec('BEGIN'); try { await work(); sqlite.exec('COMMIT'); } catch (e) { sqlite.exec('ROLLBACK'); throw e; } },
+    withTransactionAsync: async work => { sqlite.exec('BEGIN'); try { await work(db); sqlite.exec('COMMIT'); } catch (e) { sqlite.exec('ROLLBACK'); throw e; } },
   };
   return { db, close: () => sqlite.close() };
 }

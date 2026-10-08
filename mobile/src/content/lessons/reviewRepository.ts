@@ -25,11 +25,11 @@ export class LessonReviewRepository {
   private async persist(previous: EducationLesson, next: EducationLesson): Promise<EducationLesson> {
     this.assertParent();
     if (JSON.stringify(previous.source) !== JSON.stringify(next.source) || previous.review.developmentOnly !== next.review.developmentOnly) throw new Error('Source metadata and content-pack restrictions cannot be edited.');
-    await this.db.withTransactionAsync(async () => {
+    await this.db.withTransactionAsync(async tx => {
       this.assertParent();
-      const updated = await this.db.runAsync('UPDATE lessons SET status=?,payload_json=? WHERE id=? AND payload_json=?', next.review.status, JSON.stringify(next), next.id, JSON.stringify(previous));
+      const updated = await tx.runAsync('UPDATE lessons SET status=?,payload_json=? WHERE id=? AND payload_json=?', next.review.status, JSON.stringify(next), next.id, JSON.stringify(previous));
       if (updated.changes !== 1) throw new Error('The lesson changed. Reload before saving.');
-      if (next.hadithId) await this.db.runAsync('UPDATE hadith_lessons SET status=?,payload_json=? WHERE id=?', next.review.status, JSON.stringify(next), next.id);
+      if (next.hadithId) await tx.runAsync('UPDATE hadith_lessons SET status=?,payload_json=? WHERE id=?', next.review.status, JSON.stringify(next), next.id);
     });
     return next;
   }

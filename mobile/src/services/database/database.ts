@@ -1,6 +1,7 @@
 import { openDatabaseAsync } from 'expo-sqlite';
 import { schema } from '../../database/migrations/001';
 import type { Database } from './types';
+import { serializeDatabase } from './serialized';
 export type { Database } from './types';
 let connection: Promise<Database> | undefined;
 export function getDb(): Promise<Database> {
@@ -12,7 +13,7 @@ export function getDb(): Promise<Database> {
       await db.closeAsync();
       throw error;
     }
-    return db;
+    return serializeDatabase(db);
   })().catch((error: unknown) => {
     connection = undefined;
     throw error;

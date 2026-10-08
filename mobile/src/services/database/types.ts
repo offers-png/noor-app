@@ -4,5 +4,5 @@ export interface Database {
   runAsync(sql: string, ...params: SqlValue[]): Promise<{ lastInsertRowId: number; changes: number }>;
   getFirstAsync<T>(sql: string, ...params: SqlValue[]): Promise<T | null>;
   getAllAsync<T>(sql: string, ...params: SqlValue[]): Promise<T[]>;
-  withTransactionAsync(work: () => Promise<void>): Promise<void>;
+  withTransactionAsync(work: (transaction: Database) => Promise<void>): Promise<void>;
 }

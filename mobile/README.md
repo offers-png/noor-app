@@ -12,6 +12,16 @@ npm ci
 npm run android
 ```
 
+For a Windows native build, place the checkout at a physically short path such as `C:\ki`. Drive aliases can produce inconsistent paths in native autolinking. In PowerShell, configure the SDK and Android Studio Java runtime if they are not already set:
+
+```powershell
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:ANDROID_HOME\platform-tools;$env:Path"
+```
+
+Use the actual installation paths if Android Studio or the SDK is installed elsewhere. The local verification used Java 21 and Android SDK 36. Cloud builds through the `preview` or `production` EAS profile avoid local Windows native path limits.
+
 `npm run android` builds and installs a native development binary. To use Expo Go for basic module development instead, run `npm start`. Background audio and Android permission acceptance must use a native binary:
 
 ```sh
@@ -82,6 +92,8 @@ The 29 seeded ayahs include unchanged Alafasy recordings (about 2.7 MiB) from Is
 
 Canonical Arabic is stored as returned by the provider. Do not normalize, tokenize/rejoin, strip diacritics, insert verse numbers into the source string, or globally flip screen direction. Arabic display blocks use RTL; English blocks use LTR. Tests cover exact source round trips.
 
+The shared SQLite adapter queues queries and transactions so unrelated work cannot join a transaction or be rolled back with it. Inside `withTransactionAsync`, use the callback's scoped database handle for every query. Quran repositories share one initialization task per connection and retry after a failed seed. Concurrent loading, progress saving and rollback isolation have regression tests.
+
 ## Lessons and content review
 
 The development catalog includes five Arabic lessons, three Hadith teaching excerpts, five Duas, Five Pillars, Wudu steps, Salah introduction, and two Prophet story structures. The wider topic catalogs provide expansion points; they do not claim that full lessons for every Prophet/topic have been authored.
@@ -109,7 +121,7 @@ npm run export:android
 
 Automated tests exercise real SQLite migrations and profile isolation, reopening storage, progress, provider mapping, sync, immutable Arabic, review gates, PIN derivation/lockout, RTL block direction, quiz scoring, audio state and repeat behavior, and bundled recording checksums. Live API tests require credentials and native audio/lock-screen/first-install flows require a device. The full twenty-step acceptance flow from the project brief must be exercised on an Android release build with the parent-enabled development pack or properly published content. Quiz attempt summaries retain actual scores; individual selected answers are not retained.
 
-The implementation check on October 7, 2026 passed lint, TypeScript, all 60 automated tests, and the Android Hermes export (1,524 modules, 56 assets including all 29 recitation recordings). Weekly progress uses an append-only practice history so repeating a lesson does not erase earlier activity.
+The implementation check on October 7, 2026 passed lint, TypeScript and all 65 automated tests. The Android Hermes export includes all 29 recitation recordings. Weekly progress uses an append-only practice history so repeating a lesson does not erase earlier activity.
 
 On Windows, keep the native build checkout in a short path. A deeply nested checkout caused CMake/Ninja path-length failures in React Native dependencies during verification. The generated `android/` and `ios/` directories are ignored; native configuration belongs in `app.json` and config plugins.
 

@@ -9,7 +9,7 @@ import { FamilyRepository } from '../src/database/repositories/FamilyRepository'
 import type { Database, SqlValue } from '../src/services/database/types';
 export function testDb(): {db:Database;close:()=>void} {
   const native=new DatabaseSync(':memory:');
-  const db:Database={execAsync:async sql=>{native.exec(sql);},runAsync:async(sql,...p:SqlValue[])=>{const r=native.prepare(sql).run(...p);return {changes:Number(r.changes),lastInsertRowId:Number(r.lastInsertRowid)};},getFirstAsync:async<T>(sql:string,...p:SqlValue[])=>native.prepare(sql).get(...p) as T??null,getAllAsync:async<T>(sql:string,...p:SqlValue[])=>native.prepare(sql).all(...p) as T[],withTransactionAsync:async work=>{native.exec('BEGIN');try{await work();native.exec('COMMIT');}catch(e){native.exec('ROLLBACK');throw e;}}};
+  const db:Database={execAsync:async sql=>{native.exec(sql);},runAsync:async(sql,...p:SqlValue[])=>{const r=native.prepare(sql).run(...p);return {changes:Number(r.changes),lastInsertRowId:Number(r.lastInsertRowid)};},getFirstAsync:async<T>(sql:string,...p:SqlValue[])=>native.prepare(sql).get(...p) as T??null,getAllAsync:async<T>(sql:string,...p:SqlValue[])=>native.prepare(sql).all(...p) as T[],withTransactionAsync:async work=>{native.exec('BEGIN');try{await work(db);native.exec('COMMIT');}catch(e){native.exec('ROLLBACK');throw e;}}};
   return {db,close:()=>native.close()};
 }
 test('migrations are idempotent and every required table exists',async()=>{

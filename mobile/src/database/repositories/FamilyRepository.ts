@@ -14,9 +14,9 @@ export class FamilyRepository {
   async saveProgress(childId: number, lessonId: string, score?: number, level?: string) {
     if (score !== undefined && (!Number.isFinite(score) || score < 0 || score > 100)) throw new Error('Invalid score');
     const now = new Date().toISOString();
-    await this.db.withTransactionAsync(async()=>{
-      await this.db.runAsync(`INSERT INTO lesson_progress (child_id,lesson_id,status,score,attempts,last_practiced,completed_at,memorization_level) VALUES (?,?,'completed',?,1,?,?,?) ON CONFLICT(child_id,lesson_id) DO UPDATE SET status='completed',score=excluded.score,attempts=attempts+1,last_practiced=excluded.last_practiced,completed_at=excluded.completed_at,memorization_level=COALESCE(excluded.memorization_level,memorization_level)`,childId,lessonId,score ?? null,now,now,level ?? null);
-      await this.db.runAsync('INSERT INTO learning_activity(child_id,lesson_id,practiced_at) VALUES(?,?,?)',childId,lessonId,now);
+    await this.db.withTransactionAsync(async tx =>{
+      await tx.runAsync(`INSERT INTO lesson_progress (child_id,lesson_id,status,score,attempts,last_practiced,completed_at,memorization_level) VALUES (?,?,'completed',?,1,?,?,?) ON CONFLICT(child_id,lesson_id) DO UPDATE SET status='completed',score=excluded.score,attempts=attempts+1,last_practiced=excluded.last_practiced,completed_at=excluded.completed_at,memorization_level=COALESCE(excluded.memorization_level,memorization_level)`,childId,lessonId,score ?? null,now,now,level ?? null);
+      await tx.runAsync('INSERT INTO learning_activity(child_id,lesson_id,practiced_at) VALUES(?,?,?)',childId,lessonId,now);
     });
   }
   async saveMemorization(childId: number, verseKey: string, level: string, rating: string | null) {
@@ -32,11 +32,11 @@ export class FamilyRepository {
   }
   setSetting(key: string, value: unknown) { return this.db.runAsync('INSERT OR REPLACE INTO app_settings VALUES (?,?)',key,JSON.stringify(value)); }
   async resetProgress(childId: number) {
-    await this.db.withTransactionAsync(async () => {
-      await this.db.runAsync('DELETE FROM lesson_progress WHERE child_id=?',childId);
-      await this.db.runAsync('DELETE FROM quiz_attempts WHERE child_id=?',childId);
-      await this.db.runAsync('DELETE FROM memorization_progress WHERE child_id=?',childId);
-      await this.db.runAsync('DELETE FROM learning_activity WHERE child_id=?',childId);
+    await this.db.withTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM lesson_progress WHERE child_id=?',childId);
+      await tx.runAsync('DELETE FROM quiz_attempts WHERE child_id=?',childId);
+      await tx.runAsync('DELETE FROM memorization_progress WHERE child_id=?',childId);
+      await tx.runAsync('DELETE FROM learning_activity WHERE child_id=?',childId);
     });
   }
   deleteChild(childId: number) { return this.db.runAsync('DELETE FROM children WHERE id=?',childId); }

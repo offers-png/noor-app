@@ -6,6 +6,7 @@ import audioManifest from '../src/content/fixtures/quran-audio-manifest.json';
 import {DatabaseSync} from 'node:sqlite';
 import {schema} from '../src/database/migrations/001';
 import type {Database,SqlValue} from '../src/services/database/types';
+import {serializeDatabase} from '../src/services/database/serialized';
 import {FixtureQuranProvider,SEEDED_AYAHS} from '../src/services/quran/FixtureQuranProvider';
 import {QuranFoundationProvider,assertRelativeQfPath} from '../src/services/quran/QuranFoundationProvider';
 import {QuranProviderError} from '../src/services/quran/QuranProvider';
@@ -18,7 +19,7 @@ import {activeWordPosition,sourcedWordTimings} from '../src/services/quran/Quran
 import {readQuranResourcePreferences,saveQuranResourcePreferences,type QuranResourcePreferences} from '../src/services/quran/QuranResourcePreferences';
 import type {QuranSyncState,ResourceSnapshot,SyncMutation,SyncPage} from '../src/types/quran';
 
-function database(){const native=new DatabaseSync(':memory:');const db:Database={execAsync:async sql=>{native.exec(sql);},runAsync:async(sql,...params:SqlValue[])=>{const result=native.prepare(sql).run(...params);return {changes:Number(result.changes),lastInsertRowId:Number(result.lastInsertRowid)};},getFirstAsync:async<T>(sql:string,...params:SqlValue[])=>native.prepare(sql).get(...params) as T??null,getAllAsync:async<T>(sql:string,...params:SqlValue[])=>native.prepare(sql).all(...params) as T[],withTransactionAsync:async work=>{native.exec('BEGIN');try{await work();native.exec('COMMIT');}catch(error){native.exec('ROLLBACK');throw error;}}};return {db,close:()=>native.close()};}
+function database(){const native=new DatabaseSync(':memory:');const db:Database={execAsync:async sql=>{native.exec(sql);},runAsync:async(sql,...params:SqlValue[])=>{const result=native.prepare(sql).run(...params);return {changes:Number(result.changes),lastInsertRowId:Number(result.lastInsertRowid)};},getFirstAsync:async<T>(sql:string,...params:SqlValue[])=>native.prepare(sql).get(...params) as T??null,getAllAsync:async<T>(sql:string,...params:SqlValue[])=>native.prepare(sql).all(...params) as T[],withTransactionAsync:async work=>{native.exec('BEGIN');try{await work(db);native.exec('COMMIT');}catch(error){native.exec('ROLLBACK');throw error;}}};return {db,close:()=>native.close()};}
 test('canonical fixture provider, SQLite and display preserve every sourced Quran string',async()=>{
   const source=readFileSync(new URL('../src/content/fixtures/quran-seed-verbatim.txt',import.meta.url),'utf8');
   const exactRows=source.split(/\r?\n/).filter(row=>/^\d+\|\d+\|/.test(row)).map(row=>{const [chapter,ayah,...parts]=row.split('|');return {key:`${chapter}:${ayah}`,text:parts.join('|')};});
@@ -27,6 +28,50 @@ test('canonical fixture provider, SQLite and display preserve every sourced Qura
   try{await db.execAsync(schema);await seedQuran(db);const repository=new QuranRepository(async()=>db);for(const row of exactRows){const result=await provider.verse(row.key);assert.equal(result?.canonicalText,row.text);const stored=await db.getFirstAsync<{canonical_text:string}>('SELECT canonical_text FROM ayahs WHERE verse_key=?',row.key);assert.equal(stored?.canonical_text,row.text);assert.equal(displayedCanonicalText(result!.canonicalText),row.text);assert.equal((await repository.verses(Number(row.key.split(':')[0]))).find(v=>v.key===row.key)?.canonicalText,row.text);}assert.equal((await provider.chapters()).length,114);assert.equal((await provider.chapters()).reduce((sum,c)=>sum+c.ayahCount,0),6236);assert.ok(SEEDED_AYAHS.every(v=>v.translation?.source.translator==='Talal Itani'));assert.equal(arabicDisplayProps(24).writingDirection,'rtl');assert.equal(arabicDisplayProps(24).fontSize,30);}finally{close();}
 });
 test('bookmarks are isolated between child profiles and survive repository recreation',async()=>{const {db,close}=database();try{await db.execAsync(schema);await db.runAsync('INSERT INTO children(id,nickname,avatar,created_at) VALUES (?,?,?,?)',1,'Yusuf','⭐','2026-10-07');await db.runAsync('INSERT INTO children(id,nickname,avatar,created_at) VALUES (?,?,?,?)',2,'Maryam','🌙','2026-10-07');const repo=new QuranRepository(async()=>db);await repo.toggleBookmark(1,'1:1');await repo.toggleBookmark(2,'112:1');assert.deepEqual(await new QuranRepository(async()=>db).bookmarks(1),['1:1']);assert.deepEqual(await repo.bookmarks(2),['112:1']);await repo.toggleBookmark(1,'1:1');assert.deepEqual(await repo.bookmarks(1),[]);}finally{close();}});
+test('parallel first-open chapter, bookmark and ayah reads share one native transaction across repositories',async()=>{
+  const native=database();let active=0;let transactions=0;
+  const db:Database={...native.db,withTransactionAsync:async work=>{
+    assert.equal(active,0,'The same SQLite connection must not start overlapping seed transactions');active++;transactions++;
+    try{await Promise.resolve();await native.db.withTransactionAsync(async()=>work(db));}finally{active--;}
+  }};
+  try{
+    await db.execAsync(schema);
+    const first=new QuranRepository(async()=>db);const second=new QuranRepository(async()=>db);
+    const [chapters,bookmarks,ayahs]=await Promise.all([first.chapters(),first.bookmarks(1),second.verses(1),seedQuran(db)]);
+    assert.equal(transactions,1);assert.equal(chapters.length,114);assert.deepEqual(bookmarks,[]);assert.equal(ayahs.length,7);
+    assert.equal((await db.getFirstAsync<{count:number}>('SELECT count(*) AS count FROM ayahs'))?.count,29);
+    await Promise.all([first.chapters(),second.bookmarks(1),seedQuran(db)]);assert.equal(transactions,1);
+    for(const ayah of ayahs)assert.equal(ayah.canonicalText,SEEDED_AYAHS.find(source=>source.key===ayah.key)?.canonicalText);
+  }finally{native.close();}
+});
+test('failed seed transaction rolls back partial rows and a later open retries successfully',async()=>{
+  const native=database();let fail=true;let inserts=0;let transactions=0;
+  const db:Database={...native.db,runAsync:async(sql,...params)=>{
+    if(sql.startsWith('INSERT OR IGNORE INTO surahs')&&fail&&++inserts===3)throw new Error('Native seed failure');
+    return native.db.runAsync(sql,...params);
+  },withTransactionAsync:async work=>{transactions++;await native.db.withTransactionAsync(async()=>work(db));}};
+  try{
+    await db.execAsync(schema);const repo=new QuranRepository(async()=>db);
+    const failed=await Promise.allSettled([repo.chapters(),repo.bookmarks(1)]);
+    assert.ok(failed.every(result=>result.status==='rejected'));assert.equal(transactions,1);
+    assert.equal((await db.getFirstAsync<{count:number}>('SELECT count(*) AS count FROM surahs'))?.count,0);
+    fail=false;
+    const [chapters,ayahs]=await Promise.all([repo.chapters(),new QuranRepository(async()=>db).verses(107)]);
+    assert.equal(chapters.length,114);assert.equal(ayahs.length,7);assert.equal(transactions,2);
+    assert.equal(ayahs[1].canonicalText,SEEDED_AYAHS.find(source=>source.key==='107:2')?.canonicalText);
+  }finally{native.close();}
+});
+test('serialized native adapter seeds and commits sync using scoped transaction queries', {timeout:3000}, async()=>{
+  const native=database();let transactions=0;
+  const db=serializeDatabase({...native.db,withTransactionAsync:async work=>{transactions++;await native.db.withTransactionAsync(async()=>work());}});
+  try{
+    await db.execAsync(schema);const repo=new QuranRepository(async()=>db);const store=new SQLiteQuranSyncStore(db);
+    const result=await Promise.all([repo.chapters(),repo.bookmarks(1),store.commit('production',new Map([['translations:19',snapshot]]),{environment:'production',filter:'translations:19',syncToken:'native-checkpoint',lastSync:'2026-10-07',status:'complete'})]);
+    assert.equal(result[0].length,114);assert.deepEqual(result[1],[]);assert.equal(transactions,2);
+    assert.equal((await store.state('production','translations:19'))?.syncToken,'native-checkpoint');
+    assert.equal((await repo.verses(1))[0].translation?.text,'source text');
+  }finally{native.close();}
+});
 test('Quran Foundation provider never contacts network without parent opt-in',async()=>{let calls=0;const provider=new QuranFoundationProvider('https://proxy.test','production',async()=>{calls++;throw new Error('Unexpected call');});await assert.rejects(provider.chapters(),/parent/);assert.equal(calls,0);assert.throws(()=>assertRelativeQfPath('https://evil.test/api/v4/chapters'));assert.throws(()=>assertRelativeQfPath('/api/v4/chapters?url=../private'));});
 test('Quran Foundation maps canonical Arabic exactly and reports missing API credentials',async()=>{const text=SEEDED_AYAHS[0].canonicalText;const fetcher=(async()=>new Response(JSON.stringify({verse:{verse_key:'1:1',text_uthmani:text}}),{status:200})) as typeof fetch;const provider=new QuranFoundationProvider('https://proxy.test','production',fetcher,()=>true);assert.equal((await provider.verse('1:1'))?.canonicalText,text);const missing=new QuranFoundationProvider('https://proxy.test','production',(async()=>new Response(JSON.stringify({message:'Credentials not configured'}),{status:503})) as typeof fetch,()=>true);await assert.rejects(missing.verse('1:1'),/Credentials not configured/);});
 function mutation(type:SyncMutation['type'],sequence:number,extras:Partial<SyncMutation>={}):SyncMutation{return {type,sequence,resource_group:'translations',resource_id:19,record_type:null,record_key:null,snapshot_url:null,data:null,...extras};}
