@@ -4,6 +4,8 @@ import { QuizEngine } from '../../components/Quiz/QuizEngine';
 import { NarrationButton } from '../../services/audio/NarrationButton';
 import { arabicAlphabet, arabicModules, harakat, letterQuiz, practiceQuestions, simpleWords, starterLessons, type ArabicLetter } from './content';
 import { TracingCanvas } from './TracingCanvas';
+import { useAppStore } from '../../state/appStore';
+import { agePracticeGuidance } from '../../content/lessons/ageGuidance';
 
 interface Props { onComplete: (id: string, score?: number) => Promise<void>; fontSize: number; narrationEnabled?: boolean; onOpenQuran?: () => void }
 type Step = 'look' | 'listen' | 'repeat' | 'trace' | 'identify' | 'quiz';
@@ -82,6 +84,7 @@ function LetterLesson({ letter, fontSize, narrationEnabled = false, onComplete, 
 }
 
 export function ArabicScreen({ onComplete, fontSize, onOpenQuran, narrationEnabled = false }: Props) {
+  const childAge = useAppStore(state => state.children.find(child => child.id === state.selectedChildId)?.age);
   const [letter, setLetter] = useState<ArabicLetter | null>(null);
   const [module, setModule] = useState('home');
   if (letter) return <LetterLesson key={letter.id} letter={letter} fontSize={fontSize} narrationEnabled={narrationEnabled} onComplete={onComplete} onBack={() => setLetter(null)} />;
@@ -101,6 +104,7 @@ export function ArabicScreen({ onComplete, fontSize, onOpenQuran, narrationEnabl
     <Text style={styles.title}>Arabic School</Text>
     {module === 'home' ? <>
       <Text style={styles.text}>Look, listen, repeat and trace. Start with a letter you like.</Text>
+      <Text style={styles.text}>{agePracticeGuidance(childAge)}</Text>
       <Text style={styles.heading}>Your first five lessons</Text>
       <View style={styles.row}>{starterLessons.map(item => <Pressable key={item.id} accessibilityRole="button"
         accessibilityLabel={`Start ${item.name} lesson`} onPress={() => setLetter(item)} style={styles.lessonTile}>

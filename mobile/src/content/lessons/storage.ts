@@ -3,6 +3,7 @@ import { hadithFixtures } from '../fixtures/hadith';
 import { allLessons, lessonSourceRegistry } from './catalog';
 import { duaFixtures } from './duas';
 import type { EducationLesson, LessonSource } from '../../types/lessons';
+import { validAgeRange } from './approval';
 
 function equalSource(left: LessonSource, right: LessonSource): boolean {
   const fields = Object.keys(left).sort();
@@ -24,6 +25,15 @@ export async function loadStoredLessons(db: Database): Promise<EducationLesson[]
       || (lesson.review.reviewer !== null && typeof lesson.review.reviewer !== 'string')
       || (lesson.review.approvedAt !== null && typeof lesson.review.approvedAt !== 'string')
       || (lesson.review.approvedVersion !== null && typeof lesson.review.approvedVersion !== 'string')
+      || (lesson.review.reviewedContentHash !== undefined && (typeof lesson.review.reviewedContentHash !== 'string' || !/^[a-f0-9]{64}$/.test(lesson.review.reviewedContentHash)))
+      || (lesson.ageRange !== undefined && !validAgeRange(lesson.ageRange))
+      || (lesson.review.attestation !== undefined && (lesson.review.attestation?.kind !== 'parent-entered'
+        || lesson.review.attestation.qualificationConfirmed !== true || typeof lesson.review.attestation.recordedAt !== 'string'
+        || !Number.isFinite(Date.parse(lesson.review.attestation.recordedAt))))
+      || (lesson.review.publication !== undefined && (lesson.review.publication?.kind !== 'parent-local'
+        || lesson.review.publication.version !== lesson.review.version || lesson.review.publication.parentSuitabilityConfirmed !== true
+        || lesson.review.publication.sourcePermissionConfirmed !== true || typeof lesson.review.publication.publishedAt !== 'string'
+        || !Number.isFinite(Date.parse(lesson.review.publication.publishedAt))))
       || typeof lesson.title !== 'string' || typeof lesson.discussion !== 'string' || !Array.isArray(lesson.sections) || !Array.isArray(lesson.quiz)
       || !lesson.source || typeof lesson.source.sourceName !== 'string' || typeof lesson.source.sourceReference !== 'string'
       || typeof lesson.source.sourceUrl !== 'string' || typeof lesson.source.contentVersion !== 'string' || typeof lesson.source.verifiedAt !== 'string'

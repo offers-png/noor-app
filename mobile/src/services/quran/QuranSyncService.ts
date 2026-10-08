@@ -2,6 +2,7 @@ import type { QuranSyncState, ResourceGroup, ResourceSnapshot, SyncMutation } fr
 import { QuranProviderError, type QuranSyncProvider } from './QuranProvider';
 
 export const SYNC_GROUPS: ResourceGroup[] = ['articles', 'chapter_recitations', 'mushafs', 'quran_core', 'recitations', 'tafsirs', 'translations', 'word_by_word_translations', 'word_by_word_transliterations'];
+const activeEnvironments = new Set<string>();
 export function canonicalResourceFilter(filter: string): string {
   const groups = new Map<string, Set<number> | '*'>();
   for (const item of filter.split(';')) {
@@ -24,7 +25,7 @@ export interface SyncStore {
   state(environment: string, filter: string): Promise<QuranSyncState | null>;
   resource(environment: string, group: ResourceGroup, id: number): Promise<ResourceSnapshot | null>;
   resources(environment: string): Promise<ResourceSnapshot[]>;
-  commit(environment: string, resources: Map<string, ResourceSnapshot | null>, state: QuranSyncState): Promise<void>;
+  commit(environment: string, resources: Map<string, ResourceSnapshot | null>, state: QuranSyncState, networkAllowed?:()=>boolean): Promise<void>;
 }
 function key(group: ResourceGroup, id: number): string { return `${group}:${id}`; }
 function permitted(filter: string, group: string, id: number): boolean { return filter.split(';').some(part => { const [g, ids] = part.split(':'); return group === g && (ids === '*' || ids.split(',').includes(String(id))); }); }
@@ -57,8 +58,9 @@ export class QuranSyncService {
   constructor(private readonly provider: QuranSyncProvider, private readonly store: SyncStore, private readonly networkAllowed: () => boolean) {}
   async synchronize(resourceFilter: string): Promise<QuranSyncState> {
     if (!this.networkAllowed()) throw new QuranProviderError('Content downloads require parent-enabled network access.');
-    if (this.running) throw new QuranProviderError('A Quran synchronization is already running.');
+    if (this.running || activeEnvironments.has(this.provider.environment)) throw new QuranProviderError('A Quran synchronization is already running.');
     this.running = true;
+    activeEnvironments.add(this.provider.environment);
     try {
       const filter = canonicalResourceFilter(resourceFilter);
       const state = await this.store.state(this.provider.environment, filter);
@@ -67,7 +69,7 @@ export class QuranSyncService {
         if (error instanceof QuranProviderError && ['resync_required', 'token_filter_mismatch', 'cursor_filter_mismatch'].includes(error.code ?? '')) return await this.run(filter, null);
         throw error;
       }
-    } finally { this.running = false; }
+    } finally { this.running = false; activeEnvironments.delete(this.provider.environment); }
   }
   private async run(filter: string, token: string | null): Promise<QuranSyncState> {
     const staged = new Map<string, ResourceSnapshot | null>();
@@ -97,7 +99,10 @@ export class QuranSyncService {
       }
     }
     const state: QuranSyncState = { filter, environment: this.provider.environment, syncToken: finalToken, lastSync: new Date().toISOString(), status: 'complete' };
-    await this.store.commit(this.provider.environment, staged, state);
+    // Incremental deletes/updates must not turn a complete canonical snapshot into a partial Quran.
+    for(const resource of staged.values())if(resource)validateSnapshot(resource);
+    if(!this.networkAllowed())throw new QuranProviderError('Network access was disabled during synchronization. The previous offline copy remains available.');
+    await this.store.commit(this.provider.environment, staged, state,this.networkAllowed);
     return state;
   }
   private async apply(staged: Map<string, ResourceSnapshot | null>, change: SyncMutation): Promise<void> {

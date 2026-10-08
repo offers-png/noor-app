@@ -15,12 +15,19 @@ export class QuranFoundationProvider implements QuranProvider, QuranSyncProvider
     assertRelativeQfPath(path);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
+    const monitor = setInterval(() => { if (!this.networkAllowed()) controller.abort(); }, 250);
     try {
       const response = await this.fetcher(`${this.proxyUrl.replace(/\/$/, '')}/api/quran?environment=${this.environment}&path=${encodeURIComponent(path)}`, { signal: controller.signal });
-      const json = await response.json() as { error?: { code?: string; message?: string }; message?: string };
+      if(!this.networkAllowed())throw new QuranProviderError('Network access was disabled. Your saved content is still available.',undefined,'network_disabled');
+      let json:{ error?: { code?: string; message?: string }; message?: string };
+      try{json=await response.json();}catch{throw new QuranProviderError('The content service returned an unreadable response. Check the parent connection settings and try again.',response.status,'invalid_response');}
+      if(!json || typeof json!=='object')throw new QuranProviderError('The content service returned an invalid response.',response.status,'invalid_response');
       if (!response.ok) throw new QuranProviderError(json.error?.message ?? json.message ?? `Quran service returned ${response.status}`, response.status, json.error?.code);
       return json as T;
-    } finally { clearTimeout(timer); }
+    } catch(error) {
+      if(error instanceof QuranProviderError)throw error;
+      throw new QuranProviderError(!this.networkAllowed()?'Network access was disabled. Your saved content is still available.':controller.signal.aborted?'The content service timed out. Try again on a stable connection.':'The content service could not be reached. Check your connection and the parent connection settings.',undefined,!this.networkAllowed()?'network_disabled':'connection_failed');
+    } finally { clearTimeout(timer);clearInterval(monitor); }
   }
   async chapters(): Promise<Surah[]> {
     const data = await this.request<{chapters: {id:number;name_arabic:string;name_simple:string;translated_name?:{name:string};revelation_place:string;verses_count:number}[]}>('/api/v4/chapters?language=en');
@@ -56,11 +63,15 @@ export class QuranFoundationProvider implements QuranProvider, QuranSyncProvider
     if(['translations','tafsirs','recitations'].includes(data.resource_group)){
       const kind=data.resource_group as 'translations'|'tafsirs'|'recitations';
       let metadata=this.metadata.get(kind);
-      if(!metadata){metadata=this.resources(kind).then(result=>{const list=(result as Record<string,unknown>)[kind];if(!Array.isArray(list))throw new QuranProviderError('Source attribution metadata is unavailable');return list as Record<string,unknown>[];});this.metadata.set(kind,metadata);}
+      if(!metadata){metadata=this.resources(kind).then(result=>{const list=(result as Record<string,unknown>)[kind];if(!Array.isArray(list))throw new QuranProviderError('Source attribution metadata is unavailable');return list as Record<string,unknown>[];}).catch(error=>{this.metadata.delete(kind);throw error;});this.metadata.set(kind,metadata);}
       const attribution=(await metadata).find(row=>row.id===data.resource_id);
       if(!attribution)throw new QuranProviderError('The source did not provide attribution for the selected resource. No uncredited content is stored.');
-      data.attribution={...this.source(`${kind}:${data.resource_id}`),name:typeof attribution.name==='string'?attribution.name:typeof attribution.reciter_name==='string'?attribution.reciter_name:`Quran Foundation ${kind} ${data.resource_id}`,translator:typeof attribution.author_name==='string'?attribution.author_name:undefined};
+      const language=typeof attribution.language_name==='string'?attribution.language_name.toLowerCase():undefined;
+      if(kind==='tafsirs' && !['english','en'].includes(language??''))throw new QuranProviderError('Choose an English tafsir from the available source list. The selected resource is not identified as English by its publisher.',undefined,'tafsir_language');
+      data.attribution={...this.source(`${kind}:${data.resource_id}`),name:typeof attribution.name==='string'?attribution.name:typeof attribution.reciter_name==='string'?attribution.reciter_name:`Quran Foundation ${kind} ${data.resource_id}`,translator:kind==='translations'&&typeof attribution.author_name==='string'?attribution.author_name:undefined,author:kind==='tafsirs'&&typeof attribution.author_name==='string'?attribution.author_name:undefined,language};
     }
+    if(data.resource_group==='recitations' && !data.records.some(row=>row.record_type==='audio_file' && typeof row.verse_key==='string' && typeof row.url==='string' && row.url))throw new QuranProviderError('This published recitation has no ayah audio metadata. Choose another reciter or try syncing later.',undefined,'recitation_empty');
+    if(data.resource_group==='tafsirs' && !data.records.some(row=>typeof row.text==='string'&&row.text.trim()))throw new QuranProviderError('This tafsir has no published explanation text for offline reading. Choose another source or try later.',undefined,'tafsir_empty');
     return data;
   }
   async resources(kind: 'translations' | 'tafsirs' | 'recitations'): Promise<unknown> { return this.request(`/api/v4/resources/${kind}?language=en`); }

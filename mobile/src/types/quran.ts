@@ -6,6 +6,8 @@ export interface QuranSource {
   version: string;
   verifiedAt: string;
   translator?: string;
+  author?: string;
+  language?: string;
 }
 
 export interface Surah {

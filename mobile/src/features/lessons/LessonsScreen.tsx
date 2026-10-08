@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button, Card, Screen, colors } from '../../components/Common/ui';
 import { QuizEngine } from '../../components/Quiz/QuizEngine';
 import { duaFixtures } from '../../content/lessons/duas';
-import { visibleLessons } from '../../content/lessons/approval';
+import { isPublishedForFamily, visibleLessons } from '../../content/lessons/approval';
 import { loadStoredLessons, seedReviewLessons } from '../../content/lessons/storage';
 import { hadithFixtures } from '../../content/fixtures/hadith';
 import { getDb } from '../../services/database/database';
@@ -17,6 +17,7 @@ import type { EducationLesson } from '../../types/lessons';
 import { LessonIllustration } from './LessonIllustration';
 import { SourceReadingLibrary } from './SourceReadingLibrary';
 import { hasAvailableEditorialLessons } from './sourceReadingRepository';
+import { agePracticeGuidance } from '../../content/lessons/ageGuidance';
 
 export interface LessonsScreenProps {
   category: 'hadith' | 'islam' | 'duas';
@@ -25,15 +26,20 @@ export interface LessonsScreenProps {
   fontSize: number;
   childId?: number;
   narrationEnabled?: boolean;
+  childAge?: number | null;
+  onOpenParent?: () => void;
 }
 
 export function LessonsScreen(props: LessonsScreenProps) {
+  const router = useRouter();
   const selectedChildId = useAppStore(state => state.selectedChildId);
   const networkAllowed = useAppStore(state => state.settings.networkEnabled);
   const audioEnabled = useAppStore(state => state.settings.audioEnabled);
   const childId = props.childId ?? selectedChildId ?? undefined;
+  const storedAge = useAppStore(state => state.children.find(child => child.id === childId)?.age);
+  const childAge = props.childAge ?? storedAge;
   const title = props.category === 'hadith' ? 'Hadith' : props.category === 'duas' ? 'Duas' : 'Learn Islam';
-  return <Screen title={title}><LessonEntry key={`${props.category}:${childId}:${props.developmentContent}`} {...props} childId={childId} networkAllowed={networkAllowed} narrationEnabled={audioEnabled && (props.narrationEnabled ?? true)} /></Screen>;
+  return <Screen title={title}><LessonEntry key={`${props.category}:${childId}:${childAge}:${props.developmentContent}`} {...props} childId={childId} childAge={childAge} onOpenParent={props.onOpenParent ?? (() => router.push('/parent'))} networkAllowed={networkAllowed} narrationEnabled={audioEnabled && (props.narrationEnabled ?? true)} /></Screen>;
 }
 
 function LessonEntry(props: LessonsScreenProps & { networkAllowed: boolean }) {
@@ -44,17 +50,17 @@ function LessonEntry(props: LessonsScreenProps & { networkAllowed: boolean }) {
     let mounted = true;
     setHasEducation(false);
     const category = props.category;
-    void getDb().then(db => hasAvailableEditorialLessons(db, category, props.developmentContent)).then(available => {
+    void getDb().then(db => hasAvailableEditorialLessons(db, category, props.developmentContent, props.childAge)).then(available => {
       if (mounted) setHasEducation(available);
     }).catch(() => { if (mounted) setHasEducation(false); });
     return () => { mounted = false; };
-  }, [props.category, props.developmentContent]));
+  }, [props.category, props.developmentContent, props.childAge]));
   if (props.category === 'islam') return <LessonContent {...props} />;
   if (!education) return <SourceReadingLibrary category={props.category} childId={props.childId} fontSize={props.fontSize} networkAllowed={props.networkAllowed} audioEnabled={props.narrationEnabled ?? false} onComplete={props.onComplete} onLessons={hasEducation ? () => setEducation(true) : undefined} />;
   return <View style={styles.stack}><Button label="← Sourced readings" secondary onPress={() => setEducation(false)} /><LessonContent {...props} /></View>;
 }
 
-function LessonContent({ category, onComplete, developmentContent, fontSize, childId, narrationEnabled = false, networkAllowed }: LessonsScreenProps & { networkAllowed: boolean }) {
+function LessonContent({ category, onComplete, developmentContent, fontSize, childId, childAge, onOpenParent, narrationEnabled = false, networkAllowed }: LessonsScreenProps & { networkAllowed: boolean }) {
   const activeChild = childId;
   const [selected, setSelected] = useState<string | null>(null);
   const [panel, setPanel] = useState<'lessons' | 'collections' | 'saved'>('lessons');
@@ -69,7 +75,7 @@ function LessonContent({ category, onComplete, developmentContent, fontSize, chi
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const lock = useRef(false);
-  const approved = useMemo(() => visibleLessons(storedLessons, developmentContent).filter(item => item.category === category), [storedLessons, category, developmentContent]);
+  const approved = useMemo(() => visibleLessons(storedLessons, developmentContent, childAge).filter(item => item.category === category), [storedLessons, category, developmentContent, childAge]);
   const lesson = approved.find(item => item.id === selected);
   const hadith = hadithFixtures.find(item => item.id === lesson?.hadithId);
   const dua = duaFixtures.find(item => item.id === lesson?.duaId);
@@ -132,9 +138,9 @@ function LessonContent({ category, onComplete, developmentContent, fontSize, chi
       {developmentContent && <Card><Text style={styles.review}>Review pack • enabled by your parent</Text><Text style={text}>These learning ideas are awaiting qualified review. Learn together with your adult.</Text></Card>}
       {category === 'hadith' && <View style={styles.stack}><Button label="Hadith lessons" secondary={panel !== 'lessons'} onPress={() => setPanel('lessons')} /><Button label="Collections" secondary={panel !== 'collections'} onPress={() => setPanel('collections')} /><Button label={`Saved Hadith (${savedIds.length})`} secondary={panel !== 'saved'} onPress={() => setPanel('saved')} /></View>}
       <TextInput accessibilityLabel="Search lessons in Arabic or English" placeholder="Search a topic, source, or Arabic phrase" placeholderTextColor={colors.muted} value={search} onChangeText={setSearch} style={styles.search} />
-      {!approved.length && <Card><Text style={styles.heading}>Lessons awaiting review</Text><Text style={text}>Published lessons from an approved content pack will appear here. Your parent can enable the clearly labeled review pack in Parent Mode.</Text></Card>}
+      {!approved.length && <Card><Text style={styles.heading}>Let’s get your next lesson ready</Text><Text style={text}>Ask your adult to open Content review in Parent Mode, choose the right ages, and publish a lesson after their qualified reviewer checks it. Your source readings and Arabic practice are ready while you wait.</Text>{onOpenParent && <Button label="Open Parent Mode" secondary onPress={onOpenParent} />}</Card>}
       {panel === 'collections' && approved.length > 0 && <Card><Text style={styles.heading}>Sahih al-Bukhari</Text><Text style={text}>Three selected teaching excerpts. Each lesson identifies its narrator and reference. Source text and our learning ideas are stored separately.</Text><Button label="Explore the three excerpts" onPress={() => setPanel('lessons')} /></Card>}
-      {panel !== 'collections' && listed.map(item => <Card key={item.id}><Text style={styles.heading}>{item.title}</Text><Text style={text}>{item.subtitle}</Text><Text style={styles.caption}>{item.topic}</Text><Button label={`Open ${item.title}`} onPress={() => selectLesson(item)} /></Card>)}
+      {panel !== 'collections' && listed.map(item => <Card key={item.id}><Text style={styles.heading}>{item.title}</Text><Text style={text}>{item.subtitle}</Text><Text style={styles.caption}>{item.topic}{item.ageRange ? ` · Ages ${item.ageRange.min}–${item.ageRange.max}` : ''}</Text><Button label={`Open ${item.title}`} onPress={() => selectLesson(item)} /></Card>)}
       {approved.length > 0 && panel !== 'collections' && !listed.length && <Card><Text style={text}>{panel === 'saved' ? 'Save a Hadith from a lesson to find it here.' : 'No lessons match your search.'}</Text></Card>}
     </View>;
   }
@@ -142,7 +148,8 @@ function LessonContent({ category, onComplete, developmentContent, fontSize, chi
   return <View style={styles.stack}>
     <Button label="← All lessons" secondary onPress={() => { setSelected(null); setMessage(''); }} />
     <Text accessibilityRole="header" style={styles.heading}>{lesson.title}</Text>
-    {lesson.review.developmentOnly && <Text style={styles.review}>Development / review lesson • not qualified approval</Text>}
+    {isPublishedForFamily(lesson) ? <Text style={styles.caption}>Published for your family · {lesson.ageRange && `Ages ${lesson.ageRange.min}–${lesson.ageRange.max}`}</Text> : lesson.review.developmentOnly && <Text style={styles.review}>Parent-enabled review lesson · awaiting publication</Text>}
+    <Text style={text}>{agePracticeGuidance(childAge)}</Text>
     <Card><Text style={styles.caption}>{lesson.source.sourceReference}</Text><Text style={styles.caption}>{lesson.source.translationName ?? 'Source reference with original learning summary'}</Text></Card>
     {hadith && <Card><Text style={styles.heading}>Sourced Hadith excerpt</Text><Text style={styles.caption}>A selected phrase from the full narration</Text><Text accessibilityLanguage="ar" style={[styles.arabic, { fontSize: Math.max(32, fontSize), lineHeight: Math.max(55, fontSize * 1.7) }]}>{hadith.canonicalText}</Text><Text style={text}>{hadith.translation}</Text><Text style={styles.caption}>Narrator: {hadith.narrator}</Text><Text style={styles.caption}>Source: {hadith.source.sourceReference}</Text><Text style={styles.caption}>Grade: {hadith.grades.length ? hadith.grades.map(g => `${g.grade} (${g.gradedBy})`).join(', ') : 'No separate grade field supplied in this excerpt.'}</Text><Button label={savedIds.includes(hadith.id) ? 'Remove from Saved Hadith' : '★ Save this Hadith'} secondary disabled={busy || !activeChild} onPress={() => { void toggleSaved(); }} /></Card>}
     {dua && <Card><Text style={styles.heading}>{dua.textScope === 'excerpt' ? 'Sourced dua excerpt' : 'Sourced supplication'}</Text><Text accessibilityLanguage="ar" style={[styles.arabic, { fontSize: Math.max(32, fontSize), lineHeight: Math.max(55, fontSize * 1.7) }]}>{hideDua ? '•••' : dua.canonicalText}</Text><Text style={text}>{dua.transliteration}</Text><Text style={text}>{dua.translation}</Text>{dua.audioUri ? <AudioControls key={dua.id} tracks={[{ id: `${dua.id}:recording`, title: dua.title, uri: dua.audioUri, sourceLabel: `Recording for ${dua.source.sourceReference}` }]} networkAllowed={networkAllowed} audioEnabled={narrationEnabled} /> : <Text style={styles.caption}>Source audio is not supplied for this teaching selection. Practice pronunciation with your adult.</Text>}<Button label={memorizing ? 'Return to reading' : 'Memorize this dua'} secondary onPress={() => { setMemorizing(!memorizing); setHideDua(false); }} />{memorizing && <><Text style={text}>Read together → repeat → hide the Arabic → try from memory.</Text><Button label={hideDua ? 'Show Arabic' : 'Hide Arabic for practice'} secondary onPress={() => setHideDua(!hideDua)} /><Button label="😊 I practiced from memory" disabled={busy || !activeChild} onPress={() => { void memorize(); }} /><Text style={styles.caption}>You mark your own practice; the app does not judge pronunciation.</Text></>}</Card>}
