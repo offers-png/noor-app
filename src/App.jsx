@@ -3,6 +3,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "./api";
 import StudentSelect from "./StudentSelect";
 import TeacherStage from "./TeacherStage";
+import { createTeacherVoice } from "./teacherVoice.js";
+import StoryVideos from "./StoryVideos.jsx";
 
 // ── Mouth Avatar ──────────────────────────────────────────
 const MOUTH_SHAPES = {
@@ -320,6 +322,22 @@ function Classroom({ students, parentNotes, onBack }) {
   const [visionStatus,setVisionStatus]=useState("Camera observations have not started");
   const [availableVoices,setAvailableVoices]=useState([]);
   const [voiceChoice,setVoiceChoice]=useState(()=>localStorage.getItem("noor-voice")||"");
+  const [narrationVoice,setNarrationVoice]=useState(()=>localStorage.getItem("noor-natural-voice")||"teacher");
+  const [voiceStatus,setVoiceStatus]=useState({status:"idle",source:"natural",message:""});
+  const [classPaused,setClassPaused]=useState(false);
+  const [initializing,setInitializing]=useState(true);
+  const initializingRef=useRef(true);
+  const narrationVoiceRef=useRef(narrationVoice);
+  const teacherVoiceRef=useRef(null);
+  const voiceBusyRef=useRef(false);
+  const activeClassRef=useRef(true);
+  const pausedRef=useRef(false);
+  const classEpochRef=useRef(0);
+  const chatEpochRef=useRef(0);
+  const listenEpochRef=useRef(0);
+  const cameraEpochRef=useRef(0);
+  const micEpochRef=useRef(0);
+  const lastNarrationRef=useRef("");
   const voiceChoiceRef=useRef(voiceChoice);
   const monitorEpochRef=useRef(0);
   const pendingHandRef=useRef(false);
@@ -327,10 +345,11 @@ function Classroom({ students, parentNotes, onBack }) {
     voiceChoiceRef.current=voiceChoice;
     localStorage.setItem("noor-voice",voiceChoice);
   },[voiceChoice]);
+  useEffect(()=>{narrationVoiceRef.current=narrationVoice;localStorage.setItem("noor-natural-voice",narrationVoice);},[narrationVoice]);
   useEffect(()=>{
-    const update=()=>setAvailableVoices(window.speechSynthesis.getVoices());
-    update();window.speechSynthesis.addEventListener("voiceschanged",update);
-    return()=>window.speechSynthesis.removeEventListener("voiceschanged",update);
+    const update=()=>setAvailableVoices(window.speechSynthesis?.getVoices()||[]);
+    update();window.speechSynthesis?.addEventListener("voiceschanged",update);
+    return()=>window.speechSynthesis?.removeEventListener("voiceschanged",update);
   },[]);
   const activeStudent=classRoster.find(s=>s.id===activeStudentId)||student;
 
@@ -338,7 +357,6 @@ function Classroom({ students, parentNotes, onBack }) {
   const canvasRef=useRef(null);
   const camStreamRef=useRef(null);
   const micStreamRef=useRef(null);
-  const synthRef=useRef(window.speechSynthesis);
   const recRef=useRef(null);
   const interruptRecRef=useRef(null);
   const mediaRecRef=useRef(null);
@@ -391,7 +409,22 @@ function Classroom({ students, parentNotes, onBack }) {
   useEffect(()=>{thinkingRef.current=isThinking;},[isThinking]);
   useEffect(()=>{listeningRef.current=isListening;},[isListening]);
 
-  const busy=useCallback(()=>speakingRef.current||thinkingRef.current,[]);
+  const busy=useCallback(()=>voiceBusyRef.current||thinkingRef.current||pausedRef.current||initializingRef.current,[]);
+
+  const stopListening=useCallback(()=>{
+    listenEpochRef.current++;
+    clearTimeout(sendTimerRef.current);
+    finalBufferRef.current="";
+    try{recRef.current?.abort();}catch(e){}
+    try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
+    listeningRef.current=false;setIsListening(false);
+  },[]);
+  const cancelVoice=useCallback(()=>{
+    teacherVoiceRef.current?.cancel();
+    try{interruptRecRef.current?.abort();}catch(e){}
+    interruptRecRef.current=null;
+    voiceBusyRef.current=false;speakingRef.current=false;setIsSpeaking(false);
+  },[]);
 
   const inferStudentFromText=useCallback((text="")=>{
     const lower=text.toLowerCase();
@@ -481,12 +514,13 @@ function Classroom({ students, parentNotes, onBack }) {
   },[]);
 
   const stopClassroom=useCallback(()=>{
+    activeClassRef.current=false;classEpochRef.current++;chatEpochRef.current++;
     monitorEpochRef.current++;
     clearInterval(visionRef.current);
     clearInterval(handRef.current);
     clearTimeout(sendTimerRef.current);
     clearTimeout(silenceTimerRef.current);
-    synthRef.current.cancel();
+    cancelVoice();stopListening();
     try{recRef.current?.abort();}catch(e){}
     try{interruptRecRef.current?.abort();}catch(e){}
     try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
@@ -496,25 +530,28 @@ function Classroom({ students, parentNotes, onBack }) {
     camStreamRef.current?.getTracks().forEach(t=>t.stop());
     micStreamRef.current?.getTracks().forEach(t=>t.stop());
     onBack();
-  },[onBack]);
+  },[onBack,cancelVoice,stopListening]);
 
   const resetSilenceTimer=useCallback(()=>{
     clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current=setTimeout(()=>{
-      if(speakingRef.current||thinkingRef.current||!micGranted) return;
+      if(!activeClassRef.current||busy()||!micStreamRef.current?.active) return;
       askAI({text:"[SILENCE: The child has not answered for 45 seconds. Re-engage them gently, remind them of the current lesson point, and ask one simple question. Do not restart the lesson.]"});
     },45000);
-  },[micGranted]);
+  },[micGranted,busy]);
 
   // ── Camera ──────────────────────────────────────────────
   const startCamera=useCallback(async(facing="user")=>{
+    const epoch=classEpochRef.current;
+    const cameraEpoch=++cameraEpochRef.current;
     setCameraReady(false);setCameraError("");
     try{
       if(camStreamRef.current) camStreamRef.current.getTracks().forEach(t=>t.stop());
       const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:480},height:{ideal:360}},audio:false});
+      if(!activeClassRef.current||epoch!==classEpochRef.current||cameraEpoch!==cameraEpochRef.current){s.getTracks().forEach(t=>t.stop());return;}
       camStreamRef.current=s;
       if(videoRef.current){videoRef.current.srcObject=s;await videoRef.current.play();setCameraReady(true);setHandStatus("Checking for raised hands…");}
-    }catch(e){setCameraError("Camera unavailable. Allow camera access in your browser, then retry.");setHandStatus("Camera unavailable");}
+    }catch(e){if(activeClassRef.current&&epoch===classEpochRef.current&&cameraEpoch===cameraEpochRef.current){setCameraError("Camera unavailable. Allow camera access in your browser, then retry.");setHandStatus("Camera unavailable");}}
   },[]);
 
   const captureFrame=useCallback(()=>{
@@ -539,37 +576,31 @@ function Classroom({ students, parentNotes, onBack }) {
   }),[]);
 
   // ── TTS ─────────────────────────────────────────────────
-  const speak=useCallback((text,onDone)=>{
+  const speak=useCallback((text,onDone,options={})=>{
+    if(!activeClassRef.current||pausedRef.current) return;
     clearTimeout(silenceTimerRef.current);
-    try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
-    try{interruptRecRef.current?.abort();}catch(e){}
-    listeningRef.current=false;setIsListening(false);
-    synthRef.current.cancel();
-    // Strip Arabic script — TTS engine can't pronounce it, sounds broken
-    // Also strip any diacritics/harakat. Only speak transliteration.
+    stopListening();cancelVoice();
+    if(!options.preview) lastNarrationRef.current=text;
+    // Narrate English explanations; displayed Arabic is not synthetic Quran recitation.
     const noArabic=text
       .replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+/g," ")
       .replace(/[*_#~`]/g,"")
       .replace(/\s+/g," ")
       .trim();
     if(!noArabic){onDone?.();return;}
-    saveT("teacher",text); // save original with Arabic for transcript
-    const board=parseBlackboard(text);
-    if(board) setBlackboard(board);
-    const letter=detectLetter(text);
-    if(letter) setMouthLetter(letter); else if(!board) setMouthLetter(null);
-    const writing=detectWritingPrompt(text,letter);
-    if(writing) setWritingPrompt(writing);
+    if(!options.preview&&!options.replay) saveT("teacher",text);
+    if(!options.preview){
+      const board=parseBlackboard(text);
+      if(board) setBlackboard(board);
+      const letter=detectLetter(text);
+      if(letter) setMouthLetter(letter); else if(!board) setMouthLetter(null);
+      const writing=detectWritingPrompt(text,letter);
+      if(writing) setWritingPrompt(writing);
+    }
 
-    const utt=new SpeechSynthesisUtterance(noArabic);
-    utt.rate=0.92;utt.pitch=1;
-    const voices=synthRef.current.getVoices();
-    const v=voices.find(v=>v.voiceURI===voiceChoiceRef.current)
-      ||voices.find(v=>/Google UK English Female|Microsoft (Aria|Jenny|Sonia)|Natural/i.test(v.name)&&v.lang.startsWith("en"))
-      ||voices.find(v=>v.lang.startsWith("en"))||voices[0];
-    if(v) utt.voice=v;
     const stopInterruptWatch=()=>{try{interruptRecRef.current?.abort();}catch(e){} interruptRecRef.current=null;};
     const startInterruptWatch=()=>{
+      stopInterruptWatch();
       if(!micStreamRef.current?.active) return;
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
       if(!SR) return;
@@ -579,43 +610,56 @@ function Classroom({ students, parentNotes, onBack }) {
       rec.continuous=true;
       rec.interimResults=true;
       rec.onresult=e=>{
+        if(!activeClassRef.current||pausedRef.current||interruptRecRef.current!==rec||!speakingRef.current) return;
         let heard="";
         for(let i=e.resultIndex;i<e.results.length;i++) heard+=" "+e.results[i][0].transcript;
         const lower=heard.toLowerCase();
-        if(/excuse me|i have a question|can i ask|question|wait|hold on/.test(lower)){
+        if(/excuse me|i have a question|can i ask|wait|hold on/.test(lower)){
           const now=Date.now();
           if(now-lastInterruptAtRef.current<5000) return;
           lastInterruptAtRef.current=now;
           stopInterruptWatch();
-          synthRef.current.cancel();
+          cancelVoice();
           setCaption(heard.trim());
           setBubble("Yes, ya waladi, I am listening.");
           setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");
           setWaitingForHand(false);
+          startListening();
         }
       };
       rec.onerror=()=>{};
-      rec.onend=()=>{interruptRecRef.current=null;};
+      rec.onend=()=>{if(interruptRecRef.current===rec) interruptRecRef.current=null;};
       try{rec.start();}catch(e){}
     };
-    utt.onstart=()=>{setIsSpeaking(true);speakingRef.current=true;setFaceState("speaking");startInterruptWatch();};
-    utt.onend=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micStreamRef.current?.active) resetSilenceTimer();};
-    utt.onerror=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micStreamRef.current?.active) resetSilenceTimer();};
-    synthRef.current.speak(utt);
-  },[saveT,micGranted,resetSilenceTimer]);
+    if(!teacherVoiceRef.current){
+      teacherVoiceRef.current=createTeacherVoice({onState:state=>{
+        if(!activeClassRef.current) return;
+        voiceBusyRef.current=["loading","playing","blocked"].includes(state.status);
+        const playing=state.status==="playing";
+        speakingRef.current=playing;setIsSpeaking(playing);setVoiceStatus(state);
+        setFaceState(playing?"speaking":state.status==="loading"?"thinking":"watching");
+        if(playing) startInterruptWatch();else stopInterruptWatch();
+      }});
+    }
+    teacherVoiceRef.current.speak(noArabic,{voice:narrationVoiceRef.current,deviceVoiceURI:voiceChoiceRef.current,onDone:()=>{
+      if(!activeClassRef.current||pausedRef.current) return;
+      onDone?.();if(micStreamRef.current?.active) resetSilenceTimer();
+    }});
+  },[saveT,resetSilenceTimer,stopListening,cancelVoice]);
 
   // ── AI ───────────────────────────────────────────────────
   const askAI=useCallback(async({text,imageB64,visionAlert,homeworkScan})=>{
+    if(!activeClassRef.current||pausedRef.current) return;
     const rawText=text||"";
     const intent=classifyStudentText(rawText);
     if(intent==="navigation command"){stopClassroom();return;}
     const speaker=inferStudentFromText(rawText);
     if(speaker?.id) setActiveStudentId(speaker.id);
     clearTimeout(silenceTimerRef.current);
-    const canInterruptSpeaking=speakingRef.current&&/interruption|question|explanation|repeat/.test(intent);
+    const canInterruptSpeaking=voiceBusyRef.current&&/interruption|question|explanation|repeat/.test(intent);
     if(thinkingRef.current||(!canInterruptSpeaking&&busy()&&!visionAlert)) return;
     if(canInterruptSpeaking){
-      synthRef.current.cancel();
+      cancelVoice();
       setIsSpeaking(false);speakingRef.current=false;
     }
     setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
@@ -623,12 +667,14 @@ function Classroom({ students, parentNotes, onBack }) {
     if(visionAlert) msg=`[VISION: ${visionAlert}]`;
     if(homeworkScan) msg="[HOMEWORK SCAN] Read and grade this homework carefully.";
     msg=classroomMessage(msg,{visionAlert,homeworkScan});
+    const chatEpoch=++chatEpochRef.current;
     try{
       const data=await api("POST","/noor/chat",{
         student_id:student.id,lesson_id:lessonIdRef.current,
         message:msg,image_b64:imageB64||null,
         mode:modeRef.current,history:historyRef.current.slice(-14),
       });
+      if(!activeClassRef.current||pausedRef.current||chatEpoch!==chatEpochRef.current) return;
       const reply=data.reply;
       historyRef.current=[...historyRef.current,{role:"user",content:msg},{role:"assistant",content:reply}].slice(-18);
       updateTeacherMemory(intent,rawText,reply,speaker);
@@ -638,14 +684,17 @@ function Classroom({ students, parentNotes, onBack }) {
         startHandWatch();
       });
     }catch(e){
+      if(!activeClassRef.current||pausedRef.current||chatEpoch!==chatEpochRef.current) return;
       setIsThinking(false);thinkingRef.current=false;setFaceState("watching");
       if(!visionAlert) speak("Ya waladi, let me try again.",()=>{setWaitingForHand(true);startHandWatch();});
     }
-  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom,updateTeacherMemory,inferStudentFromText]);
+  },[student,speak,busy,classifyStudentText,classroomMessage,stopClassroom,updateTeacherMemory,inferStudentFromText,cancelVoice]);
 
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
-    if(!micStreamRef.current?.active||listeningRef.current) return;
+    if(!activeClassRef.current||busy()||!micStreamRef.current?.active||listeningRef.current) return;
+    const listenEpoch=++listenEpochRef.current;
+    const isCurrent=()=>activeClassRef.current&&!pausedRef.current&&listenEpoch===listenEpochRef.current;
     if(backendSttRef.current&&window.MediaRecorder&&micStreamRef.current){
       if(speakingRef.current||thinkingRef.current) return;
       const chunks=[];
@@ -657,12 +706,15 @@ function Classroom({ students, parentNotes, onBack }) {
         listeningRef.current=true;setIsListening(true);setFaceState("listening");setMicError("");
         chunkRecorder.ondataavailable=e=>{if(e.data?.size) chunks.push(e.data);};
         chunkRecorder.onstop=async()=>{
+          if(!isCurrent()) return;
           listeningRef.current=false;setIsListening(false);
           if(!speakingRef.current&&!thinkingRef.current) setFaceState("watching");
           if(chunks.length&&chunks.reduce((n,b)=>n+b.size,0)>1200){
             try{
               const audio_b64=await blobToBase64(new Blob(chunks,{type:mime}));
+              if(!isCurrent()) return;
               const data=await api("POST","/noor/speech-to-text",{audio_b64});
+              if(!isCurrent()||busy()) return;
               const said=(data.transcript||"").trim();
               const tooSimilar=said&&said.toLowerCase()===lastTranscriptRef.current.toLowerCase();
               if(said.length>2&&!tooSimilar){
@@ -678,6 +730,7 @@ function Classroom({ students, parentNotes, onBack }) {
                 return;
               }
             }catch(e){
+              if(!isCurrent()) return;
               console.log("Audio transcription error:",e.message);
               if(String(e.message).includes("OPENAI_API_KEY")){
                 backendSttRef.current=false;
@@ -687,7 +740,7 @@ function Classroom({ students, parentNotes, onBack }) {
               }
             }
           }
-          if(!speakingRef.current&&!thinkingRef.current&&micGranted) setTimeout(startListening,250);
+          if(!busy()&&micStreamRef.current?.active) setTimeout(startListening,250);
         };
         try{
           chunkRecorder.start();
@@ -714,15 +767,16 @@ function Classroom({ students, parentNotes, onBack }) {
     recRef.current=rec;
     finalBufferRef.current="";
 
-    rec.onstart=()=>{listeningRef.current=true;setIsListening(true);setFaceState("listening");setMicError("");};
+    rec.onstart=()=>{if(!isCurrent()) return;listeningRef.current=true;setIsListening(true);setFaceState("listening");setMicError("");};
 
     rec.onresult=e=>{
-      if(speakingRef.current||thinkingRef.current) return;
+      if(!isCurrent()||busy()) return;
       for(let i=e.resultIndex;i<e.results.length;i++){
         if(e.results[i].isFinal){
           finalBufferRef.current+=" "+e.results[i][0].transcript;
           clearTimeout(sendTimerRef.current);
           sendTimerRef.current=setTimeout(()=>{
+            if(!isCurrent()||busy()) return;
             const said=finalBufferRef.current.trim();
             finalBufferRef.current="";
             if(said.length>1){
@@ -742,43 +796,49 @@ function Classroom({ students, parentNotes, onBack }) {
     };
 
     rec.onend=()=>{
+      if(!isCurrent()) return;
       listeningRef.current=false;setIsListening(false);setCaption("");
       if(!speakingRef.current&&!thinkingRef.current) setFaceState("watching");
       // Always restart unless teacher speaking or thinking
-      if(!speakingRef.current&&!thinkingRef.current&&micGranted){
+      if(!busy()&&micStreamRef.current?.active){
         setTimeout(startListening,300);
       }
     };
 
     rec.onerror=e=>{
+      if(!isCurrent()) return;
       listeningRef.current=false;setIsListening(false);
       if(e.error==="not-allowed"){setMicError("Microphone blocked. Click 🔒 in address bar → Allow Microphone → Reload.");return;}
       if(e.error!=="no-speech"&&e.error!=="aborted") {
         console.log("Speech Recognition Error:",e.error);
         if(e.error==="network"||e.error==="service-not-allowed") setMicError("Speech recognition had trouble connecting. I will keep trying.");
       }
-      if(!speakingRef.current&&!thinkingRef.current&&micGranted) setTimeout(startListening,500);
+      if(!busy()&&micStreamRef.current?.active) setTimeout(startListening,500);
     };
 
     try{rec.start();}catch(e){listeningRef.current=false;setTimeout(startListening,1000);}
-  },[micGranted,captureFrame,askAI,saveT,blobToBase64,inferStudentFromText]);
+  },[micGranted,captureFrame,askAI,saveT,blobToBase64,inferStudentFromText,busy]);
 
   // Restart listening after teacher finishes speaking
   useEffect(()=>{
-    if(!isSpeaking&&!isThinking&&micGranted&&!listeningRef.current){
-      setTimeout(startListening,400);
+    if(!busy()&&micGranted&&!listeningRef.current){
+      const timer=setTimeout(startListening,400);return()=>clearTimeout(timer);
     }
-  },[isSpeaking,isThinking,micGranted]);
+  },[isSpeaking,isThinking,micGranted,voiceStatus.status,classPaused]);
 
   // ── REQUEST MIC PERMISSION ───────────────────────────────
   const requestMic=useCallback(async()=>{
+    const epoch=classEpochRef.current;
+    const micEpoch=++micEpochRef.current;
     try{
       const s=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(!activeClassRef.current||epoch!==classEpochRef.current||micEpoch!==micEpochRef.current){s.getTracks().forEach(t=>t.stop());return;}
+      micStreamRef.current?.getTracks().forEach(t=>t.stop());
       micStreamRef.current=s;
       setMicGranted(true);
       setMicError("");
     }catch(e){
-      setMicError("Microphone denied. Please allow mic access in browser settings.");
+      if(activeClassRef.current&&epoch===classEpochRef.current&&micEpoch===micEpochRef.current) setMicError("Microphone denied. Please allow mic access in browser settings.");
     }
   },[]);
 
@@ -789,6 +849,7 @@ function Classroom({ students, parentNotes, onBack }) {
 
   // ── HAND RAISE — via backend with improved error handling ─────────────────────────────
   const acknowledgeHand=()=>{
+    if(initializingRef.current||pausedRef.current||!activeClassRef.current) return;
     if(thinkingRef.current){pendingHandRef.current=true;setHandStatus("Your hand is raised. Noor will listen after finishing this response.");return;}
     lastHandRaiseRef.current=Date.now();
     setHandDetected(true);setWaitingForHand(false);
@@ -803,7 +864,7 @@ function Classroom({ students, parentNotes, onBack }) {
     let failCount=0;
     const epoch=monitorEpochRef.current;
     handRef.current=setInterval(async()=>{
-      if(busy) return;
+      if(busy||initializingRef.current||pausedRef.current||!activeClassRef.current) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
@@ -849,7 +910,7 @@ function Classroom({ students, parentNotes, onBack }) {
     let failCount=0;
     const epoch=monitorEpochRef.current;
     visionRef.current=setInterval(async()=>{
-      if(thinkingRef.current||busy) return;
+      if(initializingRef.current||thinkingRef.current||voiceBusyRef.current||pausedRef.current||!activeClassRef.current||busy) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
@@ -873,7 +934,7 @@ function Classroom({ students, parentNotes, onBack }) {
         }
         if(data.teacher_response){
           const now=Date.now();
-          if(speakingRef.current){busy=false;return;}
+          if(voiceBusyRef.current||thinkingRef.current||initializingRef.current){busy=false;return;}
           if(now-lastAttentionRef.current<12000){busy=false;return;}
           lastAttentionRef.current=now;
           setBubble(data.teacher_response);
@@ -892,20 +953,28 @@ function Classroom({ students, parentNotes, onBack }) {
 
   // ── INIT ────────────────────────────────────────────────
   useEffect(()=>{
+    activeClassRef.current=true;
+    initializingRef.current=true;setInitializing(true);
+    const epoch=++classEpochRef.current;
+    const isCurrent=()=>activeClassRef.current&&epoch===classEpochRef.current;
     let lid=null,sid=null;
     const init=async()=>{
-      await startCamera("user");
-      // Request mic permission immediately on load
-      await requestMic();
+      // Permission prompts must not block the lesson opening.
+      void startCamera("user");
+      void requestMic();
       startHandWatch();startVision();
       try{
         const ls=await api("POST","/noor/lesson/start",{student_id:student.id});
+        if(!isCurrent()) return;
         lid=ls.lesson_id;setLessonId(lid);
         const sess=await api("POST","/noor/session/start",{lesson_id:lid,student_id:student.id});
+        if(!isCurrent()) return;
         sid=sess.id;setSessionId(sid);
       }catch(e){}
+      if(!isCurrent()) return;
       try{
         const profiles=await Promise.all(classRoster.map(s=>api("GET",`/noor/student/${s.id}`).catch(()=>null)));
+        if(!isCurrent()) return;
         const memories=profiles.map((p,i)=>{
           const child=classRoster[i];
           const recent=(p?.recent_lessons||[]).find(l=>l.summary||l.notes);
@@ -917,6 +986,7 @@ function Classroom({ students, parentNotes, onBack }) {
       }catch(e){
         continuationMemoryRef.current="";
       }
+      if(!isCurrent()||pausedRef.current) return;
 
       // Build opening message — pass parent topic explicitly
       // Enhance scholar/sheikh behavior: authoritative, knowledgeable, patient teacher
@@ -927,28 +997,34 @@ function Classroom({ students, parentNotes, onBack }) {
         :`${memoryLine}\n[REAL CLASSROOM OPENING: ${classLine}] Use the continuation memory if present; otherwise choose a suitable Islamic topic. Begin like a present teacher: greet warmly, name today's learning goal in one sentence, give a vivid 1-sentence hook, teach only the first tiny step, then ask one named student to do one small action. Do not cover the whole lesson.`;
 
       setIsThinking(true);thinkingRef.current=true;setFaceState("thinking");
+      const openingEpoch=++chatEpochRef.current;
       try{
         const data=await api("POST","/noor/chat",{student_id:student.id,lesson_id:lid,message:topicLine,mode:"TEACHING",history:[]});
+        if(!isCurrent()||pausedRef.current||openingEpoch!==chatEpochRef.current) return;
         const reply=data.reply;
         historyRef.current=[{role:"user",content:"[CLASS STARTING]"},{role:"assistant",content:reply}];
         lessonStateRef.current={...lessonStateRef.current,phase:"guided practice",lastTeacherMove:"opened lesson with first task",lastTeacherPoint:reply.slice(0,220)};
         setIsThinking(false);thinkingRef.current=false;setBubble(reply);
+        initializingRef.current=false;setInitializing(false);
         speak(reply,()=>{setWaitingForHand(true);startHandWatch();startVision();startListening();});
       }catch(e){
+        if(!isCurrent()||pausedRef.current||openingEpoch!==chatEpochRef.current) return;
         setIsThinking(false);thinkingRef.current=false;
         // Fallback message with scholar/sheikh tone
         const fb=isGroupClass
           ?`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, my students. I am Sheikh Noor, your Islamic teacher. I will call each of you by name, one at a time. Raise your hand when you have a question, and say your name first.`
           :`Bismillah. Assalamu Alaikum wa Rahmatullahi wa Barakatuhu, ${student.name}! I am Sheikh Noor, your Islamic teacher. Today we embark on a journey of knowledge and wisdom. Listen carefully, ya waladi. Raise your hand when you have a question or are ready to answer. May Allah bless your learning!`;
+        initializingRef.current=false;setInitializing(false);
         setBubble(fb);speak(fb,()=>{setWaitingForHand(true);startHandWatch();startVision();startListening();});
       }
     };
     init();
     return()=>{
+      activeClassRef.current=false;classEpochRef.current++;chatEpochRef.current++;
       monitorEpochRef.current++;
       clearInterval(visionRef.current);clearInterval(handRef.current);clearTimeout(sendTimerRef.current);
       clearTimeout(silenceTimerRef.current);
-      synthRef.current.cancel();
+      cancelVoice();stopListening();teacherVoiceRef.current?.dispose();teacherVoiceRef.current=null;
       try{recRef.current?.abort();}catch(e){}
       try{interruptRecRef.current?.abort();}catch(e){}
       try{if(mediaRecRef.current?.state==="recording") mediaRecRef.current.stop();}catch(e){}
@@ -969,15 +1045,34 @@ function Classroom({ students, parentNotes, onBack }) {
   },[]);
 
   const doHomework=async()=>{
+    if(initializingRef.current||pausedRef.current||!activeClassRef.current) return;
+    const epoch=classEpochRef.current,monitorEpoch=monitorEpochRef.current;
+    const isCurrent=()=>activeClassRef.current&&!pausedRef.current&&epoch===classEpochRef.current&&monitorEpoch===monitorEpochRef.current;
     clearInterval(handRef.current);setWaitingForHand(false);setMode("HOMEWORK");
     speak(isGroupClass?`${activeStudent?.name||"My student"}, hold your homework up to the camera now.`:"Ya waladi, hold your homework up to the camera now.",async()=>{
       await startCamera("environment");
+      if(!isCurrent()) return;
       setTimeout(async()=>{
+        if(!isCurrent()) return;
         const img=captureFrame();await startCamera("user");
+        if(!isCurrent()) return;
         if(img) askAI({homeworkScan:true,imageB64:img});
         else speak("I could not see it, ya waladi. Try again.",()=>{setWaitingForHand(true);startHandWatch();});
       },2000);
     });
+  };
+
+  const pauseForVideo=()=>{
+    pausedRef.current=true;setClassPaused(true);chatEpochRef.current++;
+    monitorEpochRef.current++;clearInterval(handRef.current);clearInterval(visionRef.current);
+    clearTimeout(silenceTimerRef.current);pendingHandRef.current=false;
+    cancelVoice();stopListening();thinkingRef.current=false;setIsThinking(false);setFaceState("watching");
+  };
+  const resumeAfterVideo=()=>{
+    if(!activeClassRef.current) return;
+    pausedRef.current=false;setClassPaused(false);startHandWatch();startVision();
+    if(lastNarrationRef.current) speak(lastNarrationRef.current,()=>{setWaitingForHand(true);startListening();}, {replay:true});
+    else {startListening();resetSilenceTimer();}
   };
 
   return(
@@ -990,7 +1085,7 @@ function Classroom({ students, parentNotes, onBack }) {
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <span style={{width:7,height:7,borderRadius:"50%",background:isListening?"#4ade80":isSpeaking?"#f0c060":isThinking?"#a78bfa":"#6aaa80",display:"inline-block",boxShadow:isListening?"0 0 6px #4ade80":"none"}}/>
           <span style={{fontSize:11,color:isListening?"#4ade80":isSpeaking?"#f0c060":isThinking?"#a78bfa":"#6aaa80"}}>
-            {isListening?"Listening":isSpeaking?"Speaking":isThinking?"Thinking":"Watching"}
+            {classPaused?"Paused":initializing?"Starting lesson":voiceStatus.status==="loading"?"Preparing voice":voiceStatus.status==="blocked"?"Tap to hear":isListening?"Listening":isSpeaking?"Speaking":isThinking?"Thinking":"Watching"}
           </span>
         </div>
       </div>
@@ -1030,17 +1125,28 @@ function Classroom({ students, parentNotes, onBack }) {
       <TeacherStage letter={mouthLetter} board={blackboard} speaking={isSpeaking}/>
       <div className="classroom-controls">
         <label htmlFor="teacher-voice">Teacher voice</label>
-        <select id="teacher-voice" value={voiceChoice} onChange={e=>setVoiceChoice(e.target.value)}>
-          <option value="">Recommended voice</option>
-          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</option>)}
+        <select id="teacher-voice" value={narrationVoice} onChange={e=>{cancelVoice();setNarrationVoice(e.target.value);}}>
+          <option value="teacher">Brian · Warm teacher</option>
+          <option value="storyteller">George · Storyteller</option>
+          <option value="device">Device voice</option>
         </select>
+        {narrationVoice==="device"&&<><label htmlFor="device-voice">Device voice</label><select id="device-voice" value={voiceChoice} onChange={e=>setVoiceChoice(e.target.value)}><option value="">Recommended device voice</option>{availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</option>)}</select></>}
+        <div className="voice-actions">
+          <button disabled={classPaused||isThinking||initializing} onClick={()=>speak("Welcome to our classroom. Take your time. We will learn together, one small step at a time.",undefined,{preview:true})}>Preview voice</button>
+          <button disabled={classPaused||isThinking||!lastNarrationRef.current} onClick={()=>speak(lastNarrationRef.current,undefined,{replay:true})}>Replay teacher</button>
+          <button onClick={cancelVoice}>Stop voice</button>
+          {voiceStatus.status==="blocked"&&<button onClick={()=>teacherVoiceRef.current?.resume()}>Tap to hear teacher</button>}
+        </div>
+        <p className="camera-status" role="status">{voiceStatus.message||(voiceStatus.source==="device"?"Device voice":"AI-generated teacher narration · ElevenLabs")}</p>
         <div className="camera-status" role="status">{cameraError||handStatus}</div>
         {cameraError&&<button onClick={()=>startCamera("user")}>Retry camera</button>}
-        <button onClick={acknowledgeHand}>✋ I have a question</button>
-        <button onClick={()=>setWritingPrompt({letter:mouthLetter?.letter||"",label:mouthLetter?.label||"letter practice"})}>✎ Practice writing</button>
+        <button disabled={classPaused||initializing} onClick={acknowledgeHand}>✋ I have a question</button>
+        <button disabled={classPaused||initializing} onClick={()=>setWritingPrompt({letter:mouthLetter?.letter||"",label:mouthLetter?.label||"letter practice"})}>✎ Practice writing</button>
         <p className="camera-status">{visionStatus}</p>
-        <div aria-label="Tell Noor how you feel">{["I need help","Please repeat","I need a break"].map(text=><button key={text} disabled={isThinking} onClick={()=>askAI({text})}>{text}</button>)}</div>
+        <div aria-label="Tell Noor how you feel">{["I need help","Please repeat","I need a break"].map(text=><button key={text} disabled={isThinking||classPaused||initializing} onClick={()=>askAI({text})}>{text}</button>)}</div>
       </div>
+
+      <StoryVideos lessonText={`${parentNotes||""}\n${bubble}`} onPause={pauseForVideo} onResume={resumeAfterVideo} disabled={initializing}/>
 
       {writingPrompt&&(
         <WritingPad
@@ -1066,9 +1172,9 @@ function Classroom({ students, parentNotes, onBack }) {
       {/* Mode buttons — parent controls only */}
       <div style={{display:"flex",gap:8,padding:"8px 14px 0",width:"100%",boxSizing:"border-box"}}>
         {[["TEACHING","📚 Lesson","#1a7a40"],["RECITATION","🕌 Recite","#7d3c98"]].map(([m,l,c])=>(
-          <button key={m} onClick={()=>{setMode(m);askAI({text:`[MODE: ${m}] Switch to ${m} mode now.`});}} style={{flex:1,background:mode===m?c:"rgba(255,255,255,0.1)",border:`2px solid ${mode===m?c:"rgba(255,255,255,0.15)"}`,borderRadius:12,color:"white",padding:"9px",fontSize:12,fontWeight:mode===m?"bold":"normal",cursor:"pointer"}}>{l}</button>
+          <button key={m} disabled={classPaused} onClick={()=>{setMode(m);askAI({text:`[MODE: ${m}] Switch to ${m} mode now.`});}} style={{flex:1,background:mode===m?c:"rgba(255,255,255,0.1)",border:`2px solid ${mode===m?c:"rgba(255,255,255,0.15)"}`,borderRadius:12,color:"white",padding:"9px",fontSize:12,fontWeight:mode===m?"bold":"normal",cursor:"pointer"}}>{l}</button>
         ))}
-        <button onClick={doHomework} style={{flex:1,background:"rgba(169,50,38,0.7)",border:"2px solid rgba(169,50,38,0.5)",borderRadius:12,color:"white",padding:"9px",fontSize:12,cursor:"pointer"}}>📝 Homework</button>
+        <button disabled={classPaused} onClick={doHomework} style={{flex:1,background:"rgba(169,50,38,0.7)",border:"2px solid rgba(169,50,38,0.5)",borderRadius:12,color:"white",padding:"9px",fontSize:12,cursor:"pointer"}}>📝 Homework</button>
       </div>
 
       <div style={{fontSize:10,color:"#3d7a55",padding:"6px 0 12px",textAlign:"center"}}>Raise your hand with your face and hand in view, or use “I have a question”.</div>
