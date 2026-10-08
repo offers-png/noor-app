@@ -116,6 +116,8 @@ Large touch targets, screen reader labels, high contrast text, adjustable Arabic
 
 ## Verification
 
+The Android 1.0.1 content update passed 76 tests, lint, TypeScript, a native release build, and an installed upgrade check with network and development review content disabled. Existing PIN, profile, Quran bookmark and reading progress survived the update; new Dua and Hadith practice persisted after restarting. See [the content update acceptance record](docs/ANDROID-CONTENT-UPDATE.md) for source permissions, exact APK identity and test scope.
+
 ```sh
 npm run lint
 npm run typecheck
