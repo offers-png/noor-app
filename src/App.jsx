@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 import { api } from "./api";
 import StudentSelect from "./StudentSelect";
+import TeacherStage from "./TeacherStage";
 
 // ── Mouth Avatar ──────────────────────────────────────────
 const MOUTH_SHAPES = {
@@ -28,82 +29,6 @@ const MOUTH_SHAPES = {
   "و":{shape:"lips_round",label:"و · Waw",color:"#38bdf8",desc:"Round your lips"},
   "ي":{shape:"smile_wide",label:"ي · Ya",color:"#e879f9",desc:"Wide smile position"},
 };
-
-function getMouthOpenY(shape, phase) {
-  const opens = {
-    open_wide:60,lips_together:51,tongue_top:62,tongue_between:60,
-    throat:65,breath_h:68,throat_rough:65,throat_deep:68,throat_gargle:65,
-    back_throat:65,mid_throat:62,open_breath:65,lips_round:64,lip_teeth:62,
-    roll_r:62,teeth_close:56,smile_wide:60,
-  };
-  const max = opens[shape] || 60;
-  return phase === 0 ? 50 : phase === 1 ? max : 50 + (max - 50) * 0.6;
-}
-
-function MouthAvatar({ letterData, speaking }) {
-  const [phase, setPhase] = useState(0);
-  useEffect(() => {
-    if (!speaking || !letterData) return;
-    const t = setInterval(() => setPhase(p => (p + 1) % 3), 170);
-    return () => clearInterval(t);
-  }, [speaking, letterData]);
-  if (!letterData) return null;
-  const lowerY = getMouthOpenY(letterData.shape, phase);
-  const hasLip = letterData.shape === "lips_together";
-  const hasTongue = letterData.shape === "tongue_top" || letterData.shape === "tongue_between";
-  return (
-    <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", borderRadius:16, padding:"10px 12px",
-      border:`2px solid ${letterData.color}40`, display:"flex", flexDirection:"column", alignItems:"center", gap:6, minWidth:130 }}>
-      <div style={{ fontSize:48, color:letterData.color, fontFamily:"serif", lineHeight:1,
-        textShadow:`0 0 16px ${letterData.color}60`,
-        animation: speaking ? "lp 0.4s ease-in-out infinite alternate" : "none" }}>
-        {letterData.label.split("·")[0].trim()}
-      </div>
-      <svg viewBox="0 0 120 100" width={105} height={85} style={{ background:"#2d1a1a", borderRadius:10 }}>
-        <ellipse cx="60" cy="50" rx="52" ry="44" fill="#FDEBD0"/>
-        <path d="M 28 50 Q 60 42 92 50" stroke="#8b3a3a" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-        {lowerY > 52 && (
-          <path d={`M 28 50 Q 60 ${lowerY} 92 50 Q 60 50 28 50`} fill="#1a0800"/>
-        )}
-        {hasTongue && lowerY > 55 && (
-          <ellipse cx="60" cy={50 + (lowerY - 50) * 0.35} rx="16" ry="7" fill="#c05560"/>
-        )}
-        <path d={`M 28 50 Q 60 ${lowerY} 92 50`} stroke="#8b3a3a" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-        {hasLip && <><circle cx="44" cy="30" r="4" fill="#c8956a"/><circle cx="76" cy="30" r="4" fill="#c8956a"/></>}
-        {lowerY > 54 && <line x1="34" y1="50" x2="86" y2="50" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeDasharray="7,4"/>}
-        {speaking && lowerY > 52 && [1,2,3].map(i => (
-          <ellipse key={i} cx="60" cy="50" rx={18+i*11} ry={6+i*4} fill="none" stroke={letterData.color} strokeWidth="1" opacity={0.35 - i*0.08}>
-            <animate attributeName="rx" values={`${18+i*11};${26+i*11};${18+i*11}`} dur="0.55s" repeatCount="indefinite"/>
-            <animate attributeName="opacity" values={`${0.35-i*0.08};0;${0.35-i*0.08}`} dur="0.55s" repeatCount="indefinite"/>
-          </ellipse>
-        ))}
-      </svg>
-      <div style={{ fontSize:12, color:letterData.color, fontWeight:"bold" }}>{letterData.label}</div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", textAlign:"center" }}>{letterData.desc}</div>
-      <style>{`@keyframes lp{from{transform:scale(1)}to{transform:scale(1.06)}}`}</style>
-    </div>
-  );
-}
-
-// ── Blackboard ─────────────────────────────────────────────
-function Blackboard({ content }) {
-  if (!content) return null;
-  return (
-    <div style={{ background:"linear-gradient(135deg,#1a3a1a,#0d2b0d)", border:"5px solid #5a3a1a",
-      borderRadius:10, padding:"10px 12px", boxShadow:"inset 0 2px 10px rgba(0,0,0,0.5)", minHeight:75,
-      flex:1, position:"relative" }}>
-      <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 80% 20%,rgba(255,255,255,0.03) 0%,transparent 60%)", pointerEvents:"none" }}/>
-      {content.title && <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginBottom:6, textAlign:"center", letterSpacing:1, textTransform:"uppercase" }}>✦ {content.title} ✦</div>}
-      {content.lines?.map((line, i) => (
-        <div key={i} style={{ marginBottom:5, textAlign:"center" }}>
-          {line.arabic && <div style={{ fontSize:content.type==="arabic_letter"?26:18, color:"#f0e68c", fontFamily:"serif", direction:"rtl", lineHeight:1.3 }}>{line.arabic}</div>}
-          {line.transliteration && <div style={{ fontSize:10, color:"#a8d8a8", fontStyle:"italic", marginTop:2 }}>{line.transliteration}</div>}
-          {line.translation && <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", marginTop:1 }}>{line.translation}</div>}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function WritingPad({ prompt, onSubmit, onClose }) {
   const padRef = useRef(null);
@@ -389,6 +314,24 @@ function Classroom({ students, parentNotes, onBack }) {
   const [cheatingCount,setCheatingCount]=useState(0);
   const [micGranted,setMicGranted]=useState(false);
   const [micError,setMicError]=useState("");
+  const [cameraReady,setCameraReady]=useState(false);
+  const [cameraError,setCameraError]=useState("");
+  const [handStatus,setHandStatus]=useState("Waiting for camera");
+  const [visionStatus,setVisionStatus]=useState("Camera observations have not started");
+  const [availableVoices,setAvailableVoices]=useState([]);
+  const [voiceChoice,setVoiceChoice]=useState(()=>localStorage.getItem("noor-voice")||"");
+  const voiceChoiceRef=useRef(voiceChoice);
+  const monitorEpochRef=useRef(0);
+  const pendingHandRef=useRef(false);
+  useEffect(()=>{
+    voiceChoiceRef.current=voiceChoice;
+    localStorage.setItem("noor-voice",voiceChoice);
+  },[voiceChoice]);
+  useEffect(()=>{
+    const update=()=>setAvailableVoices(window.speechSynthesis.getVoices());
+    update();window.speechSynthesis.addEventListener("voiceschanged",update);
+    return()=>window.speechSynthesis.removeEventListener("voiceschanged",update);
+  },[]);
   const activeStudent=classRoster.find(s=>s.id===activeStudentId)||student;
 
   const videoRef=useRef(null);
@@ -538,6 +481,7 @@ function Classroom({ students, parentNotes, onBack }) {
   },[]);
 
   const stopClassroom=useCallback(()=>{
+    monitorEpochRef.current++;
     clearInterval(visionRef.current);
     clearInterval(handRef.current);
     clearTimeout(sendTimerRef.current);
@@ -564,12 +508,13 @@ function Classroom({ students, parentNotes, onBack }) {
 
   // ── Camera ──────────────────────────────────────────────
   const startCamera=useCallback(async(facing="user")=>{
+    setCameraReady(false);setCameraError("");
     try{
       if(camStreamRef.current) camStreamRef.current.getTracks().forEach(t=>t.stop());
       const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:480},height:{ideal:360}},audio:false});
       camStreamRef.current=s;
-      if(videoRef.current){videoRef.current.srcObject=s;await videoRef.current.play();}
-    }catch(e){console.log("cam",e);}
+      if(videoRef.current){videoRef.current.srcObject=s;await videoRef.current.play();setCameraReady(true);setHandStatus("Checking for raised hands…");}
+    }catch(e){setCameraError("Camera unavailable. Allow camera access in your browser, then retry.");setHandStatus("Camera unavailable");}
   },[]);
 
   const captureFrame=useCallback(()=>{
@@ -617,16 +562,15 @@ function Classroom({ students, parentNotes, onBack }) {
     if(writing) setWritingPrompt(writing);
 
     const utt=new SpeechSynthesisUtterance(noArabic);
-    utt.rate=0.78;utt.pitch=0.78;
+    utt.rate=0.92;utt.pitch=1;
     const voices=synthRef.current.getVoices();
-    const v=voices.find(v=>/Microsoft (David|Mark|George|Ryan|Adam)|Google UK English Male|Google US English Male|en-.*male|Arabic.*Male|ar-.*male/i.test(`${v.name} ${v.lang}`))
-      ||voices.find(v=>/David|Mark|George|Ryan|Adam|Male/i.test(v.name))
-      ||voices.find(v=>v.lang.startsWith("en"))
-      ||voices[0];
+    const v=voices.find(v=>v.voiceURI===voiceChoiceRef.current)
+      ||voices.find(v=>/Google UK English Female|Microsoft (Aria|Jenny|Sonia)|Natural/i.test(v.name)&&v.lang.startsWith("en"))
+      ||voices.find(v=>v.lang.startsWith("en"))||voices[0];
     if(v) utt.voice=v;
     const stopInterruptWatch=()=>{try{interruptRecRef.current?.abort();}catch(e){} interruptRecRef.current=null;};
     const startInterruptWatch=()=>{
-      if(!micGranted) return;
+      if(!micStreamRef.current?.active) return;
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
       if(!SR) return;
       const rec=new SR();
@@ -655,8 +599,8 @@ function Classroom({ students, parentNotes, onBack }) {
       try{rec.start();}catch(e){}
     };
     utt.onstart=()=>{setIsSpeaking(true);speakingRef.current=true;setFaceState("speaking");startInterruptWatch();};
-    utt.onend=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
-    utt.onerror=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micGranted) resetSilenceTimer();};
+    utt.onend=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micStreamRef.current?.active) resetSilenceTimer();};
+    utt.onerror=()=>{stopInterruptWatch();setIsSpeaking(false);speakingRef.current=false;setFaceState("watching");onDone?.();if(micStreamRef.current?.active) resetSilenceTimer();};
     synthRef.current.speak(utt);
   },[saveT,micGranted,resetSilenceTimer]);
 
@@ -701,7 +645,7 @@ function Classroom({ students, parentNotes, onBack }) {
 
   // ── SPEECH RECOGNITION — continuous=true, supports Arabic & English ────────────────
   const startListening=useCallback(()=>{
-    if(!micGranted||listeningRef.current) return;
+    if(!micStreamRef.current?.active||listeningRef.current) return;
     if(backendSttRef.current&&window.MediaRecorder&&micStreamRef.current){
       if(speakingRef.current||thinkingRef.current) return;
       const chunks=[];
@@ -844,12 +788,22 @@ function Classroom({ students, parentNotes, onBack }) {
   },[micGranted]);
 
   // ── HAND RAISE — via backend with improved error handling ─────────────────────────────
+  const acknowledgeHand=()=>{
+    if(thinkingRef.current){pendingHandRef.current=true;setHandStatus("Your hand is raised. Noor will listen after finishing this response.");return;}
+    lastHandRaiseRef.current=Date.now();
+    setHandDetected(true);setWaitingForHand(false);
+    speak("Yes, I am listening. Go ahead.",()=>{startListening();startHandWatch();});
+  };
+  useEffect(()=>{
+    if(!isThinking && pendingHandRef.current){pendingHandRef.current=false;acknowledgeHand();}
+  },[isThinking]);
   const startHandWatch=useCallback(()=>{
     clearInterval(handRef.current);
     let busy=false;
     let failCount=0;
+    const epoch=monitorEpochRef.current;
     handRef.current=setInterval(async()=>{
-      if(thinkingRef.current||busy) return;
+      if(busy) return;
       busy=true;
       const img=captureFrame();
       if(!img){busy=false;return;}
@@ -860,8 +814,10 @@ function Classroom({ students, parentNotes, onBack }) {
           session_id:sessionIdRef.current,
           image_b64:img
         });
-        failCount=0; // Reset on success
-        if(data.raised){
+        if(epoch!==monitorEpochRef.current) return;
+        failCount=0;setHandStatus(data.raised?"Raised hand detected":"Camera checked · No raised hand detected");
+        if(data.raised && thinkingRef.current){pendingHandRef.current=true;setHandStatus("Raised hand detected · Noor will listen after this response");}
+        if(data.raised && !thinkingRef.current){
           const now=Date.now();
           if(now-lastHandRaiseRef.current<9000){busy=false;return;}
           lastHandRaiseRef.current=now;
@@ -874,7 +830,8 @@ function Classroom({ students, parentNotes, onBack }) {
           speak(callOn,()=>{setTimeout(startListening,200);startHandWatch();});
         }
       }catch(e){
-        failCount++;
+        if(epoch!==monitorEpochRef.current) return;
+        failCount++;setHandStatus("Hand detection unavailable. Use the raise-hand button below.");
         console.log("Hand detection error:",e.message,"(attempt",failCount+")");
         // If backend is down, show user feedback
         if(failCount>3) {
@@ -890,6 +847,7 @@ function Classroom({ students, parentNotes, onBack }) {
     clearInterval(visionRef.current);
     let busy=false;
     let failCount=0;
+    const epoch=monitorEpochRef.current;
     visionRef.current=setInterval(async()=>{
       if(thinkingRef.current||busy) return;
       busy=true;
@@ -903,13 +861,14 @@ function Classroom({ students, parentNotes, onBack }) {
           image_b64:img,
           mode:modeRef.current,
         });
-        failCount=0; // Reset on success
+        if(epoch!==monitorEpochRef.current) return;
+        failCount=0;setVisionStatus(data.event_type ? `Camera cue: ${data.event_type}. This is an estimate, not a confirmed emotion.` : "Camera checked · No new observation");
         if(data.event_type==="cheating"){
           setCheatingCount(p=>p+1);
-          setAlertMsg("👀 Sheikh Noor sees you!");
+          setAlertMsg("Camera cue detected. Do you need help?");
           setTimeout(()=>setAlertMsg(""),3000);
         } else if(data.event_type==="distracted"){
-          setAlertMsg("⚠️ Pay attention!");
+          setAlertMsg("Would you like a break or another explanation?");
           setTimeout(()=>setAlertMsg(""),3000);
         }
         if(data.teacher_response){
@@ -921,7 +880,8 @@ function Classroom({ students, parentNotes, onBack }) {
           speak(data.teacher_response,()=>{setWaitingForHand(true);startHandWatch();});
         }
       }catch(e){
-        failCount++;
+        if(epoch!==monitorEpochRef.current) return;
+        failCount++;setVisionStatus("Camera observations unavailable. Tell Noor how you are feeling below.");
         if(failCount>5) {
           console.warn("Vision endpoint not responding. Backend may be down.");
         }
@@ -937,7 +897,7 @@ function Classroom({ students, parentNotes, onBack }) {
       await startCamera("user");
       // Request mic permission immediately on load
       await requestMic();
-      startHandWatch();
+      startHandWatch();startVision();
       try{
         const ls=await api("POST","/noor/lesson/start",{student_id:student.id});
         lid=ls.lesson_id;setLessonId(lid);
@@ -985,6 +945,7 @@ function Classroom({ students, parentNotes, onBack }) {
     };
     init();
     return()=>{
+      monitorEpochRef.current++;
       clearInterval(visionRef.current);clearInterval(handRef.current);clearTimeout(sendTimerRef.current);
       clearTimeout(silenceTimerRef.current);
       synthRef.current.cancel();
@@ -1020,7 +981,7 @@ function Classroom({ students, parentNotes, onBack }) {
   };
 
   return(
-    <div style={{background:"linear-gradient(180deg,#051a0d,#0d3320)",minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'Segoe UI',Arial,sans-serif",color:"white",maxWidth:480,margin:"0 auto",overflow:"hidden"}}>
+    <div style={{background:"linear-gradient(180deg,#051a0d,#0d3320)",minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'Segoe UI',Arial,sans-serif",color:"white",maxWidth:860,margin:"0 auto",overflow:"hidden"}}>
 
       {/* Top bar */}
       <div style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 14px",boxSizing:"border-box",background:"rgba(0,0,0,0.3)"}}>
@@ -1055,24 +1016,31 @@ function Classroom({ students, parentNotes, onBack }) {
 
       {/* Face + Camera */}
       <div style={{display:"flex",gap:10,padding:"8px 14px 0",width:"100%",boxSizing:"border-box",alignItems:"center"}}>
-        <div style={{flexShrink:0}}><Face state={faceState} size={90}/></div>
-        <div style={{flex:1,height:90,borderRadius:14,overflow:"hidden",border:`2px solid ${handDetected?"#f0c040":"rgba(255,255,255,0.15)"}`,background:"#000",position:"relative",transition:"border-color 0.3s"}}>
+
+        <div style={{flex:1,height:160,borderRadius:14,overflow:"hidden",border:`2px solid ${handDetected?"#f0c040":"rgba(255,255,255,0.15)"}`,background:"#000",position:"relative",transition:"border-color 0.3s"}}>
           <video ref={videoRef} autoPlay playsInline muted style={{width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)"}}/>
           <div style={{position:"absolute",top:4,left:4,background:"rgba(14,77,42,0.85)",borderRadius:7,padding:"2px 7px",fontSize:10,display:"flex",alignItems:"center",gap:3}}>
-            <span style={{color:"#4ade80"}}>●</span>Live
+            <span style={{color:cameraReady?"#4ade80":"#f0c060"}}>●</span>{cameraReady?"Camera on":"Camera off"}
           </div>
           {waitingForHand&&<div style={{position:"absolute",bottom:4,left:"50%",transform:"translateX(-50%)",background:"rgba(240,192,64,0.92)",borderRadius:7,padding:"2px 8px",fontSize:10,color:"#000",fontWeight:"bold",whiteSpace:"nowrap"}}>🖐 Raise hand to answer</div>}
         </div>
       </div>
       <canvas ref={canvasRef} style={{display:"none"}}/>
 
-      {/* Blackboard + Mouth */}
-      {(blackboard||mouthLetter)&&(
-        <div style={{display:"flex",gap:8,padding:"6px 14px 0",width:"100%",boxSizing:"border-box",alignItems:"stretch"}}>
-          {blackboard&&<Blackboard content={blackboard}/>}
-          {mouthLetter&&<MouthAvatar letterData={mouthLetter} speaking={isSpeaking}/>}
-        </div>
-      )}
+      <TeacherStage letter={mouthLetter} board={blackboard} speaking={isSpeaking}/>
+      <div className="classroom-controls">
+        <label htmlFor="teacher-voice">Teacher voice</label>
+        <select id="teacher-voice" value={voiceChoice} onChange={e=>setVoiceChoice(e.target.value)}>
+          <option value="">Recommended voice</option>
+          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</option>)}
+        </select>
+        <div className="camera-status" role="status">{cameraError||handStatus}</div>
+        {cameraError&&<button onClick={()=>startCamera("user")}>Retry camera</button>}
+        <button onClick={acknowledgeHand}>✋ I have a question</button>
+        <button onClick={()=>setWritingPrompt({letter:mouthLetter?.letter||"",label:mouthLetter?.label||"letter practice"})}>✎ Practice writing</button>
+        <p className="camera-status">{visionStatus}</p>
+        <div aria-label="Tell Noor how you feel">{["I need help","Please repeat","I need a break"].map(text=><button key={text} disabled={isThinking} onClick={()=>askAI({text})}>{text}</button>)}</div>
+      </div>
 
       {writingPrompt&&(
         <WritingPad
@@ -1103,7 +1071,7 @@ function Classroom({ students, parentNotes, onBack }) {
         <button onClick={doHomework} style={{flex:1,background:"rgba(169,50,38,0.7)",border:"2px solid rgba(169,50,38,0.5)",borderRadius:12,color:"white",padding:"9px",fontSize:12,cursor:"pointer"}}>📝 Homework</button>
       </div>
 
-      <div style={{fontSize:10,color:"#3d7a55",padding:"6px 0 12px",textAlign:"center"}}>🖐 Raise hand to answer · Always listening · No touch needed</div>
+      <div style={{fontSize:10,color:"#3d7a55",padding:"6px 0 12px",textAlign:"center"}}>Raise your hand with your face and hand in view, or use “I have a question”.</div>
       <style>{`@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(192,57,43,0.5)}70%{box-shadow:0 0 0 14px rgba(192,57,43,0)}100%{box-shadow:0 0 0 0 rgba(192,57,43,0)}}`}</style>
     </div>
   );
