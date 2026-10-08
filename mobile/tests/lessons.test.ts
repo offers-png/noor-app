@@ -11,7 +11,10 @@ import { HadithProviderError } from '../src/services/hadith/HadithProvider';
 import { hadithFixtures } from '../src/content/fixtures/hadith';
 import { allLessons, lessonSourceRegistry } from '../src/content/lessons/catalog';
 import { duaFixtures } from '../src/content/lessons/duas';
-import { canShowReviewedContent, publishReviewedLesson, visibleLessons } from '../src/content/lessons/approval';
+import { canParentPublishLesson, canShowReviewedContent, publishReviewedLesson, validAgeRange, visibleLessons } from '../src/content/lessons/approval';
+import { quizReviewLines } from '../src/content/lessons/quizReview';
+import { agePracticeGuidance } from '../src/content/lessons/ageGuidance';
+import { reviewContentHash } from '../src/content/lessons/reviewContent';
 import { loadStoredLessons, seedReviewLessons } from '../src/content/lessons/storage';
 import { LessonReviewRepository } from '../src/content/lessons/reviewRepository';
 
@@ -65,17 +68,22 @@ test('Sunnah errors reject wrong references, missing Arabic, insecure production
   await assert.rejects(failing.getHadith('bukhari', '1'), (e: unknown) => e instanceof HadithProviderError && e.code === 'network');
 });
 
-test('review approval requires publication, reviewer, exact version and production pack', () => {
+test('review approval requires an exact reviewer attestation and separate explicit family publication', () => {
   assert.equal(visibleLessons(allLessons, false).length, 0);
   assert.equal(visibleLessons(allLessons, true).length, 13);
-  const review = { ...allLessons[0].review, developmentOnly: false, status: 'published' as const, reviewer: 'Qualified reviewer', approvedAt: '2026-10-07', approvedVersion: '1' };
+  const review = { ...allLessons[0].review, status: 'published' as const, reviewer: 'Reviewer named by parent', approvedAt: '2026-10-07', approvedVersion: '1', reviewedContentHash: reviewContentHash(allLessons[0]),
+    attestation: { kind: 'parent-entered' as const, qualificationConfirmed: true as const, recordedAt: '2026-10-07' },
+    publication: { kind: 'parent-local' as const, version: '1', publishedAt: '2026-10-08', parentSuitabilityConfirmed: true as const, sourcePermissionConfirmed: true as const } };
   assert.equal(canShowReviewedContent(review, false), true);
   assert.equal(canShowReviewedContent({ ...review, version: '2' }, false), false);
   assert.equal(canShowReviewedContent({ ...review, reviewer: null }, false), false);
   assert.equal(canShowReviewedContent({ ...review, status: 'approved' }, false), false);
-  assert.equal(canShowReviewedContent({ ...review, developmentOnly: true }, false), false);
-  assert.throws(() => publishReviewedLesson(allLessons[0]), /qualified approval/);
-  assert.equal(publishReviewedLesson({ ...allLessons[0], review: { ...review, status: 'approved' } }).review.status, 'published');
+  assert.equal(canShowReviewedContent({ ...review, publication: undefined }, false), false);
+  assert.equal(canShowReviewedContent({ ...review, attestation: undefined }, false), false);
+  assert.equal(canShowReviewedContent({ ...review, publication: { ...review.publication, version: '2' } }, false), false);
+  assert.throws(() => publishReviewedLesson(allLessons[0]), /qualified-reviewer attestation/);
+  assert.throws(() => publishReviewedLesson({ ...allLessons[0], review: { ...review, status: 'approved' } }), /Confirm parent/);
+  assert.equal(publishReviewedLesson({ ...allLessons[0], review: { ...review, status: 'approved' } }, { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }).review.status, 'published');
 });
 
 test('religious fixtures carry provenance, excerpt scope, separate original commentary and review status', () => {
@@ -157,7 +165,7 @@ test('parent teaching edits persist while source Arabic, translations, reference
   } finally { close(); }
 });
 
-test('review status is persisted, approval is parent-attested, and development review packs cannot be published', async () => {
+test('bundled draft review is persisted and requires separate parent permission and suitability before publication', async () => {
   const { db, close } = localDb();
   try {
     await db.execAsync(schema); const review = new LessonReviewRepository(db, () => true); await review.list();
@@ -165,9 +173,15 @@ test('review status is persisted, approval is parent-attested, and development r
     await assert.rejects(review.approve('hadith-1', '1', 'Reviewer', false), /confirm/);
     const approved = await review.approve('hadith-1', '1', 'Entered reviewer', true);
     assert.equal(approved.review.status, 'approved'); assert.equal(approved.review.attestation?.kind, 'parent-entered');
-    await assert.rejects(review.publish('hadith-1', '1'), /production content pack/);
+    await assert.rejects(review.publish('hadith-1', '1'), /Confirm parent/);
+    await assert.rejects(review.publish('hadith-1', '1', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: false }), /Confirm parent/);
+    const published = await review.publish('hadith-1', '1', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true });
+    assert.equal(published.review.status, 'published'); assert.equal(published.review.developmentOnly, true);
+    assert.equal(published.review.publication?.kind, 'parent-local');
+    assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 1);
     const requested = await review.requestReview('hadith-1', '1');
     assert.equal(requested.review.status, 'needs_review'); assert.equal(requested.review.reviewer, null);
+    assert.equal(requested.review.publication, undefined); assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
     assert.equal((await db.getFirstAsync<{ status: string }>('SELECT status FROM hadith_lessons WHERE id=?', 'hadith-1'))?.status, 'needs_review');
   } finally { close(); }
 });
@@ -179,9 +193,9 @@ test('published production lesson requires exact reviewed version; subsequent ed
     const production = { ...allLessons.find(lesson => lesson.id === 'islam-five-pillars')!, id: 'licensed-production-pillar-introduction', review: { status: 'needs_review' as const, version: '1', reviewer: null, approvedAt: null, approvedVersion: null, developmentOnly: false } };
     await db.runAsync('INSERT INTO lessons(id,category,status,payload_json,source_json) VALUES(?,?,?,?,?)', production.id, production.category, production.review.status, JSON.stringify(production), JSON.stringify(production.source));
     const review = new LessonReviewRepository(db, () => true);
-    await assert.rejects(review.publish(production.id, '1'), /approval/);
+    await assert.rejects(review.publish(production.id, '1'), /attestation/);
     await review.approve(production.id, '1', 'Entered qualified reviewer', true);
-    const published = await review.publish(production.id, '1'); assert.equal(published.review.status, 'published');
+    const published = await review.publish(production.id, '1', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }); assert.equal(published.review.status, 'published');
     assert.ok(visibleLessons(await loadStoredLessons(db), false).some(lesson => lesson.id === production.id));
     const edited = await review.edit(production.id, '1', { sections: production.sections.map(section => ({ title: section.title, body: section.body })), discussion: 'A new discussion?' });
     assert.equal(edited.review.version, '2'); assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
@@ -209,4 +223,124 @@ test('malformed imported review records cannot bypass production approval gates'
     await db.runAsync('INSERT INTO lessons(id,category,status,payload_json,source_json) VALUES(?,?,?,?,?)', malformed.id, malformed.category, 'published', JSON.stringify(malformed), JSON.stringify(malformed.source));
     await assert.rejects(loadStoredLessons(db), /integrity checks/);
   } finally { close(); }
+});
+
+test('age changes withdraw published teaching and its attestation, preserve source records, and require review of the new version', async () => {
+  const { db, close } = localDb();
+  try {
+    await db.execAsync(schema); const repository = new LessonReviewRepository(db, () => true);
+    const original = (await repository.list()).find(lesson => lesson.id === 'hadith-1')!;
+    const sourceBefore = await db.getFirstAsync('SELECT canonical_text,source_json,payload_json FROM hadiths WHERE id=?', original.hadithId!);
+    const version2 = await repository.edit(original.id, '1', { sections: original.sections, discussion: original.discussion, ageRange: { min: 8, max: 11 } });
+    assert.equal(version2.review.version, '2'); assert.equal(version2.review.status, 'draft');
+    await repository.requestReview(original.id, '2');
+    await repository.approve(original.id, '2', 'Reviewer supplied by parent', true);
+    await assert.rejects(repository.publish(original.id, '2', { parentSuitabilityConfirmed: false, sourcePermissionConfirmed: true }), /Confirm parent/);
+    const published = await repository.publish(original.id, '2', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true });
+    assert.equal(visibleLessons([published], false, 9).length, 1);
+    assert.equal(visibleLessons([published], false, 7).length, 0);
+    assert.equal(visibleLessons([published], false, 12).length, 0);
+    assert.equal(visibleLessons([published], false, null).length, 1);
+    const version3 = await repository.edit(original.id, '2', { sections: published.sections, discussion: published.discussion, ageRange: { min: 12, max: 15 } });
+    assert.equal(version3.review.version, '3'); assert.equal(version3.review.publication, undefined);
+    assert.equal(version3.review.attestation, undefined); assert.equal(version3.review.reviewer, null);
+    assert.equal(visibleLessons(await loadStoredLessons(db), false, 13).length, 0);
+    assert.deepEqual(await db.getFirstAsync('SELECT canonical_text,source_json,payload_json FROM hadiths WHERE id=?', original.hadithId!), sourceBefore);
+    await assert.rejects(repository.approve(original.id, '2', 'Old reviewer', true), /changed/);
+    await assert.rejects(repository.publish(original.id, '3', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }), /attestation/);
+    await assert.rejects(repository.edit(original.id, '3', { sections: published.sections, discussion: '', ageRange: { min: 15, max: 8 } }), /age range/);
+  } finally { close(); }
+});
+
+test('existing installed drafts without age metadata stay private until ages are saved and newly reviewed', async () => {
+  const { db, close } = localDb();
+  try {
+    await db.execAsync(schema); await seedReviewLessons(db);
+    const legacy = { ...allLessons[0], ageRange: undefined };
+    await db.runAsync('UPDATE lessons SET payload_json=? WHERE id=?', JSON.stringify(legacy), legacy.id);
+    const review = new LessonReviewRepository(db, () => true);
+    assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
+    await assert.rejects(review.approve(legacy.id, '1', 'Named reviewer', true), /age range/);
+    const edited = await review.edit(legacy.id, '1', { sections: legacy.sections, discussion: legacy.discussion, ageRange: { min: 5, max: 7 } });
+    assert.equal(edited.review.version, '2');
+    await review.requestReview(legacy.id, '2'); await review.approve(legacy.id, '2', 'Named reviewer', true);
+    const published = await review.publish(legacy.id, '2', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true });
+    assert.equal(canShowReviewedContent(published.review, false), true);
+  } finally { close(); }
+});
+
+test('unknown restricted development packs cannot gain publication rights through an attestation', () => {
+  const lesson = { ...allLessons[0], id: 'restricted-unlicensed-import' };
+  assert.equal(canParentPublishLesson(lesson), false);
+  assert.throws(() => publishReviewedLesson(lesson, { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }), /restricted content pack/);
+  assert.equal(validAgeRange({ min: 5, max: 15 }), true);
+  for (const range of [{ min: 4, max: 15 }, { min: 5, max: 16 }, { min: 8.5, max: 12 }, { min: 12, max: 8 }]) assert.equal(validAgeRange(range), false);
+});
+
+test('the parent quiz preview exposes actual choices, matching keys, and ordering keys', () => {
+  const choice = allLessons[0].quiz[0];
+  assert.ok(quizReviewLines(choice).some(line => line === 'Answer: The reason for an action'));
+  const order = allLessons.find(lesson => lesson.id === 'islam-wudu')!.quiz[0];
+  assert.deepEqual(quizReviewLines(order), ['1. Hands', '2. Head', '3. Feet']);
+  assert.deepEqual(quizReviewLines({ id: 'truth', type: 'true-false', prompt: 'Practice prompt', answer: false }), ['Answer: False']);
+  assert.deepEqual(quizReviewLines({ id: 'match', type: 'match', prompt: 'Practice prompt', pairs: [{ id: 'a', left: 'A', right: 'B' }] }), ['A → B']);
+});
+
+test('age guidance gives short supported practice to younger children without adding religious facts', () => {
+  assert.ok(agePracticeGuidance(5).includes('one small step'));
+  assert.ok(agePracticeGuidance(9).includes('tell them what you learned'));
+  assert.ok(agePracticeGuidance(14).includes('ask your teacher'));
+  assert.ok(agePracticeGuidance(null).includes('with your adult'));
+});
+
+test('review fingerprints reject changed teaching or ages even if a stale import keeps its version and attestation', async () => {
+  const { db, close } = localDb();
+  try {
+    await db.execAsync(schema); const repository = new LessonReviewRepository(db, () => true); await repository.list();
+    const approved = await repository.approve('islam-salah', '1', 'Reviewer supplied by parent', true);
+    assert.equal(approved.review.reviewedContentHash, reviewContentHash(approved));
+    const published = await repository.publish('islam-salah', '1', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true });
+    const imported = { ...published, ageRange: { min: 12, max: 15 }, discussion: 'Changed teaching without a version update.' };
+    assert.notEqual(reviewContentHash(imported), published.review.reviewedContentHash);
+    assert.equal(visibleLessons([imported], false).length, 0);
+    await db.runAsync('UPDATE lessons SET payload_json=? WHERE id=?', JSON.stringify(imported), imported.id);
+    assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
+    assert.throws(() => publishReviewedLesson({ ...imported, review: { ...imported.review, status: 'approved' } }, { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }), /changed after review/);
+    const reordered = { ...published, source: Object.fromEntries(Object.entries(published.source).reverse()) as typeof published.source };
+    assert.equal(reviewContentHash(reordered), published.review.reviewedContentHash);
+  } finally { close(); }
+});
+
+test('parent authorization revoked during awaited writes rolls back approval and publication', async () => {
+  for (const action of ['approve', 'publish'] as const) {
+    const { db, close } = localDb();
+    let authorized = true;
+    let expireDuringWrite = false;
+    const guarded: Database = { ...db, withTransactionAsync: work => db.withTransactionAsync(async transaction => {
+      await work({ ...transaction, runAsync: async (sql, ...params) => {
+        const result = await transaction.runAsync(sql, ...params);
+        if (expireDuringWrite && sql.startsWith('UPDATE hadith_lessons')) {
+          await Promise.resolve();
+          authorized = false;
+        }
+        return result;
+      } });
+    }) };
+    try {
+      await db.execAsync(schema);
+      const repository = new LessonReviewRepository(guarded, () => authorized);
+      await repository.list();
+      if (action === 'publish') await repository.approve('hadith-1', '1', 'Reviewer named by parent', true);
+      const before = await db.getFirstAsync('SELECT status,payload_json FROM lessons WHERE id=?', 'hadith-1');
+      const hadithBefore = await db.getFirstAsync('SELECT status,payload_json FROM hadith_lessons WHERE id=?', 'hadith-1');
+      expireDuringWrite = true;
+      await assert.rejects(action === 'approve'
+        ? repository.approve('hadith-1', '1', 'Reviewer named by parent', true)
+        : repository.publish('hadith-1', '1', { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true }), /Unlock Parent Mode/);
+      assert.equal(authorized, false);
+      assert.deepEqual(await db.getFirstAsync('SELECT status,payload_json FROM lessons WHERE id=?', 'hadith-1'), before);
+      assert.deepEqual(await db.getFirstAsync('SELECT status,payload_json FROM hadith_lessons WHERE id=?', 'hadith-1'), hadithBefore);
+      assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
+    } finally { close(); }
+  }
 });

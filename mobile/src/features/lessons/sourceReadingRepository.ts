@@ -4,9 +4,9 @@ import { loadStoredLessons, seedReviewLessons } from '../../content/lessons/stor
 import type { Database } from '../../services/database/types';
 import type { SourceReadingRecord } from '../../types/lessons';
 
-export async function hasAvailableEditorialLessons(db: Database, category: 'hadith' | 'duas', developmentContent: boolean): Promise<boolean> {
+export async function hasAvailableEditorialLessons(db: Database, category: 'hadith' | 'duas', developmentContent: boolean, childAge?: number | null): Promise<boolean> {
   if (developmentContent) await seedReviewLessons(db);
-  return visibleLessons(await loadStoredLessons(db), developmentContent).some(lesson => lesson.category === category);
+  return visibleLessons(await loadStoredLessons(db), developmentContent, childAge).some(lesson => lesson.category === category);
 }
 
 /** Local activity only. This repository never edits or approves religious source text. */

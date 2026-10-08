@@ -106,7 +106,7 @@ test('repository preserves ayah-file timing and applies nonempty tafsir ranges w
   const {db,close}=database();
   try{
     await db.execAsync(schema);await seedQuran(db);
-    const tafsir:ResourceSnapshot={...snapshot,resource_group:'tafsirs',resource_id:818,records:[{id:1,verse_key:'1:1',start_verse_id:1,end_verse_id:1,text:''},{id:7,verse_key:'1:7',start_verse_id:1,end_verse_id:7,group_verse_key_from:'1:1',group_verse_key_to:'1:7',text:'Exact publisher range explanation.'}]};
+    const tafsir:ResourceSnapshot={...snapshot,resource_group:'tafsirs',resource_id:818,attribution:{name:'Mock published English tafsir',author:'Mock publisher author',language:'English',reference:'test',url:'https://publisher.example',license:'Test resource only',version:'test',verifiedAt:'test'},records:[{id:1,verse_key:'1:1',start_verse_id:1,end_verse_id:1,text:''},{id:7,verse_key:'1:7',start_verse_id:1,end_verse_id:7,group_verse_key_from:'1:1',group_verse_key_to:'1:7',text:'Exact publisher range explanation.'}]};
     const recitation:ResourceSnapshot={...snapshot,resource_group:'recitations',resource_id:7,records:[{record_type:'audio_file',id:11,verse_key:'1:1',url:'https://audio.source.test/001001.mp3',segments:[[1,120,810],[2,820,1510]]},{record_type:'audio_file',id:12,verse_key:'1:2',url:'https://audio.source.test/001002.mp3',segments:[]},{record_type:'audio_segment',id:13,audio_file_id:21,verse_key:'1:2',timestamp_from:7000,timestamp_to:12000,segments:[[1,7300,7900]]}]};
     await new SQLiteQuranSyncStore(db).commit('production',new Map([['tafsirs:818',tafsir],['recitations:7',recitation]]),{environment:'production',filter:'tafsirs:818;recitations:7',syncToken:'checkpoint',lastSync:'2026-10-07',status:'complete'});
     const ayahs=await new QuranRepository(async()=>db).verses(1);
@@ -148,7 +148,7 @@ test('parent resource choices persist across repositories, stay environment scop
     const selected:QuranResourcePreferences={translations:20,recitations:20,tafsirs:20,word_by_word_translations:20,word_by_word_transliterations:20};
     for(const group of Object.keys(selected) as (keyof QuranResourcePreferences)[])for(const id of [10,20]){
       const records=group==='recitations'?[{record_type:'audio_file',id,verse_key:key,url:`https://source.test/${id}.mp3`}]:group.startsWith('word_by_word')?[{id,word_id:1,text:`Source ${id} word layer`}]:group==='tafsirs'?[{id,verse_key:key,start_verse_id:1,end_verse_id:1,text:`Source ${id} explanation`}]:[{id,verse_key:key,text:`Source ${id} translation`}];
-      changes.set(`${group}:${id}`,{...snapshot,resource_group:group,resource_id:id,records});
+      changes.set(`${group}:${id}`,{...snapshot,resource_group:group,resource_id:id,records,...(group==='tafsirs'?{attribution:{name:'Mock published English tafsir',author:'Mock publisher author',language:'English',reference:'test',url:'https://publisher.example',license:'Test resource only',version:'test',verifiedAt:'test'}}:{})});
     }
     const store=new SQLiteQuranSyncStore(db);const state:QuranSyncState={environment:'production',filter:'translations:10,20',syncToken:'checkpoint',lastSync:'2026-10-07',status:'complete'};
     await store.commit('production',changes,state);

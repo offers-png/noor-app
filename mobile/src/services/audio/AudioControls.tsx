@@ -53,10 +53,12 @@ export function AudioControls({ tracks, networkAllowed = false, audioEnabled = t
   useEffect(() => { positionCallback.current?.(status.currentTime, status.playing); }, [status.currentTime, status.playing]);
   useEffect(() => {
     operation.current += 1;
-    player.pause();
-    // Expo's Android replace implementation expects a source record, even though
-    // the public AudioSource union includes null. The empty hook handles no-source states.
-    if (source !== null) player.replace(source);
+    try {
+      player.pause();
+      // Expo's Android replace implementation expects a source record, even though
+      // the public AudioSource union includes null. The empty hook handles no-source states.
+      if (source !== null) player.replace(source);
+    } catch { dispatch({ type: 'error', message: 'This recording could not be opened. Ask a parent to check its download.' }); }
   }, [player, source]);
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true,
@@ -130,11 +132,13 @@ export function AudioControls({ tracks, networkAllowed = false, audioEnabled = t
   useEffect(() => {
     if (!autoPlay || !allowed || !status.isLoaded || autoStarted.current) return;
     autoStarted.current = true;
-    if (Platform.OS !== 'web') player.setActiveForLockScreen(true, {
-      title: track.title, artist: track.sourceLabel ?? 'Kids Islam learning', albumTitle: 'Kids Islam',
-    });
-    dispatch({ type: 'play' });
-    player.play();
+    try {
+      if (Platform.OS !== 'web') player.setActiveForLockScreen(true, {
+        title: track.title, artist: track.sourceLabel ?? 'Kids Islam learning', albumTitle: 'Kids Islam',
+      });
+      dispatch({ type: 'play' });
+      player.play();
+    } catch { dispatch({ type: 'error', message: 'This recording could not start. Try again.' }); }
   }, [autoPlay, allowed, status.isLoaded, player, track]);
 
   useEffect(() => () => {

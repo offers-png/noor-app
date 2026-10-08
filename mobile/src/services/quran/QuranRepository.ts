@@ -2,12 +2,15 @@ import type { Database } from '../database/types';
 import type { Ayah, QuranSource, QuranSyncState, ResourceGroup, ResourceSnapshot, Surah } from '../../types/quran';
 import { ALL_SURAHS, SEEDED_AYAHS } from './FixtureQuranProvider';
 import type { SyncStore } from './QuranSyncService';
-import { audioCacheKey, resolveQuranAudioUrl } from './QuranAudioDownloads';
+import { audioCacheKey, resolveQuranAudioUrl, verifiedLocalQuranAudio } from './QuranAudioDownloads';
 import { verseIdForReference } from './QuranNavigation';
 import { sourcedWordTimings } from './QuranTiming';
 import { readQuranResourcePreferences, selectActiveQuranResource, type QuranResourcePreferences } from './QuranResourcePreferences';
 import { bundledTransliteration } from '../../content/fixtures/QuranTransliteration';
 import { bundledPublishedMeaning } from '../../content/fixtures/QuranMeaning';
+import { readTanzilText } from './QuranLicensedText';
+import { isEnglishTafsir, tafsirVerseRange } from './QuranTafsir';
+import { QuranProviderError } from './QuranProvider';
 
 const seedOperations = new WeakMap<Database, Promise<void>>();
 
@@ -40,8 +43,9 @@ export class SQLiteQuranSyncStore implements SyncStore {
     const rows = await this.db.getAllAsync<{payload_json:string}>('SELECT payload_json FROM quran_resources WHERE resource LIKE ?', `qf:${environment}:%`);
     return rows.map(r => JSON.parse(r.payload_json) as ResourceSnapshot);
   }
-  async commit(environment: string, resources: Map<string,ResourceSnapshot | null>, state: QuranSyncState): Promise<void> {
+  async commit(environment: string, resources: Map<string,ResourceSnapshot | null>, state: QuranSyncState, networkAllowed:()=>boolean=()=>true): Promise<void> {
     await this.db.withTransactionAsync(async tx => {
+      if (!networkAllowed()) throw new QuranProviderError('Network permission changed; the previous offline copy remains available.');
       for (const [key, resource] of resources) {
         const [group,id] = key.split(':');
         const scoped = `qf:${environment}:${group}`;
@@ -55,6 +59,7 @@ export class SQLiteQuranSyncStore implements SyncStore {
         }
       }
       await tx.runAsync('INSERT OR REPLACE INTO quran_sync(resource,resource_id,version,last_sync,sync_token,download_status) VALUES (?,?,?,?,?,?)', `filter:${environment}`, state.filter, '1', state.lastSync, state.syncToken, state.status);
+      if (!networkAllowed()) throw new QuranProviderError('Network permission changed; the previous offline copy remains available.');
     });
   }
 }
@@ -71,35 +76,45 @@ export class QuranRepository {
     const chapters = (await db.getAllAsync<{payload_json:string}>('SELECT payload_json FROM surahs ORDER BY number')).map(s => JSON.parse(s.payload_json) as Surah);
     const core = await new SQLiteQuranSyncStore(db).resource(this.environment, 'quran_core', 1);
     if (core) for (const chapter of chapters) chapter.availableOffline = chapter.availableOffline || core.records.some(row => row.record_type === 'verse' && row.chapter_id === chapter.number);
+    const downloadedArabic = await readTanzilText(db, 'arabic');
+    if (downloadedArabic) for (const chapter of chapters) { chapter.availableOffline = true; if (!ALL_SURAHS.find(s => s.number === chapter.number)?.availableOffline) chapter.source = downloadedArabic.staged.source; }
     return chapters;
   }
   async verses(surahNumber: number): Promise<Ayah[]> {
     const db = await this.db();
     const resources = await new SQLiteQuranSyncStore(db).resources(this.environment);
     const preferences = await readQuranResourcePreferences(db, this.environment);
+    const downloadedArabic = await readTanzilText(db, 'arabic');
+    const downloadedTransliteration = await readTanzilText(db, 'transliteration');
+    const transliterations = new Map(downloadedTransliteration?.staged.verses.map(verse => [verse.key, { text: verse.text, source: { ...downloadedTransliteration.staged.source, reference: verse.key } }]) ?? []);
     const core = resources.find(r => r.resource_group === 'quran_core');
     let ayahs:Ayah[]=[];
     if (core) {
       const verses = core.records.filter(r => r.record_type === 'verse' && r.chapter_id === surahNumber && typeof r.text_uthmani === 'string');
       if (verses.length) {
-        ayahs=verses.sort((a,b) => Number(a.verse_number)-Number(b.verse_number)).map(row => this.mapSynced(row, core, resources, preferences));
+        ayahs=verses.sort((a,b) => Number(a.verse_number)-Number(b.verse_number)).map(row => this.mapSynced(row, core, resources, preferences, transliterations));
       }
     }
-    if(!ayahs.length)ayahs=(await db.getAllAsync<{payload_json:string;canonical_text:string}>('SELECT payload_json,canonical_text FROM ayahs WHERE surah_number=? ORDER BY ayah_number', surahNumber)).map(row => {const ayah={ ...JSON.parse(row.payload_json) as Ayah, canonicalText: row.canonical_text };ayah.audio??=SEEDED_AYAHS.find(v=>v.key===ayah.key)?.audio;return this.layers(ayah,undefined,resources,preferences);});
-    for(const ayah of ayahs)if(ayah.audio?.downloadId){const file=await db.getFirstAsync<{path:string}>('SELECT path FROM downloads WHERE id=? AND status=?',ayah.audio.downloadId,'complete');if(file?.path)ayah.audio.localUri=file.path;}
+    if(!ayahs.length)ayahs=(await db.getAllAsync<{payload_json:string;canonical_text:string}>('SELECT payload_json,canonical_text FROM ayahs WHERE surah_number=? ORDER BY ayah_number', surahNumber)).map(row => {const ayah={ ...JSON.parse(row.payload_json) as Ayah, canonicalText: row.canonical_text };ayah.audio??=SEEDED_AYAHS.find(v=>v.key===ayah.key)?.audio;return this.layers(ayah,undefined,resources,preferences,transliterations);});
+    if (downloadedArabic) {
+      const existing = new Set(ayahs.map(ayah => ayah.key));
+      for (const verse of downloadedArabic.staged.verses) if (verse.surahNumber === surahNumber && !existing.has(verse.key)) ayahs.push(this.layers({ key: verse.key, surahNumber, ayahNumber: verse.ayahNumber, canonicalText: verse.text, source: { ...downloadedArabic.staged.source, reference: verse.key } }, undefined, resources, preferences, transliterations));
+      ayahs.sort((a,b) => a.ayahNumber - b.ayahNumber);
+    }
+    for(const ayah of ayahs)if(ayah.audio?.downloadId){ayah.audio.localUri=await verifiedLocalQuranAudio(db,ayah.audio.downloadId);}
     return ayahs;
   }
-  private mapSynced(row: Record<string,unknown>, core: ResourceSnapshot, resources: ResourceSnapshot[], preferences:QuranResourcePreferences): Ayah {
+  private mapSynced(row: Record<string,unknown>, core: ResourceSnapshot, resources: ResourceSnapshot[], preferences:QuranResourcePreferences, transliterations:Map<string,{text:string;source:QuranSource}>): Ayah {
     const key = String(row.verse_key);
     const fixture=SEEDED_AYAHS.find(v=>v.key===key);
     const ayah: Ayah = { key, surahNumber: Number(row.chapter_id), ayahNumber: Number(row.verse_number), canonicalText: row.text_uthmani as string, source: qfSource(core,key),translation:fixture?.translation,audio:fixture?.audio };
-    return this.layers(ayah,core,resources,preferences);
+    return this.layers(ayah,core,resources,preferences,transliterations);
   }
-  private layers(ayah:Ayah,core:ResourceSnapshot|undefined,resources:ResourceSnapshot[],preferences:QuranResourcePreferences):Ayah{
+  private layers(ayah:Ayah,core:ResourceSnapshot|undefined,resources:ResourceSnapshot[],preferences:QuranResourcePreferences,transliterations:Map<string,{text:string;source:QuranSource}>):Ayah{
     const key=ayah.key;
     // Apply the current bundled edition at read time, including databases created by earlier APKs.
     // Separate source layers never change the persisted canonical Arabic or a chosen QF resource.
-    ayah.transliteration ??= bundledTransliteration(key);
+    ayah.transliteration ??= transliterations.get(key) ?? bundledTransliteration(key);
     const published = bundledPublishedMeaning(key);
     if (published) { ayah.publishedMeaning = published.meaning; ayah.publisherNotes = published.notes; }
     const translation = selectActiveQuranResource(resources,'translations',preferences);
@@ -107,11 +122,13 @@ export class QuranRepository {
     if (translated && translation) ayah.translation = { text: translated.text as string, source: { ...qfSource(translation,key), translator: typeof translated.translator === 'string' ? translated.translator : translation.attribution?.translator } };
     const tafsir = selectActiveQuranResource(resources,'tafsirs',preferences);
     const verseId = core?.records.find(r => r.record_type === 'verse' && r.verse_key === key)?.id ?? verseIdForReference(key);
-    const tafsirText = tafsir?.records.find(r => {
-      if (typeof r.text !== 'string' || !r.text) return false;
-      if (Number.isSafeInteger(r.start_verse_id) && Number.isSafeInteger(r.end_verse_id) && typeof verseId === 'number') return Number(r.start_verse_id) <= verseId && verseId <= Number(r.end_verse_id);
-      return r.verse_key === key;
-    });
+    // Previously saved generic metadata cannot establish the language or authority of commentary.
+    // Keep Rowwad meanings/notes separate; never use them as a tafsir fallback.
+    delete ayah.tafsir;
+    const tafsirText = isEnglishTafsir(tafsir) ? tafsir.records.find(r => {
+      const range = tafsirVerseRange(r);
+      return range && typeof verseId === 'number' && range.start <= verseId && verseId <= range.end;
+    }) : undefined;
     if (tafsirText && tafsir) ayah.tafsir = {text:tafsirText.text as string,source:qfSource(tafsir,typeof tafsirText.group_verse_key_from === 'string' && typeof tafsirText.group_verse_key_to === 'string' ? `${tafsirText.group_verse_key_from}–${tafsirText.group_verse_key_to}` : key)};
     const audio = selectActiveQuranResource(resources,'recitations',preferences);
     const file = audio?.records.find(r => r.verse_key === key && r.record_type === 'audio_file' && typeof r.url === 'string');

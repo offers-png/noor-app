@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AudioControls, type AudioTrack } from '../../services/audio/AudioControls';
 import { MemorizationScreen } from '../memorization/MemorizationScreen';
 import { selectAyahRange } from '../memorization/logic';
 import { QuranRepository } from '../../services/quran/QuranRepository';
+import { configuredContentConnection } from '../../services/quran/config';
 import { LatestRequest } from '../../services/quran/LatestRequest';
 import { parseAyahReference } from '../../services/quran/QuranNavigation';
 import { activeWordPosition } from '../../services/quran/QuranTiming';
-import { arabicDisplayProps, sourceTextRuns } from '../../services/quran/presentation';
+import { arabicDisplayProps, sourceTextRuns, sourceTextParagraphs } from '../../services/quran/presentation';
 import { quranAudioAssets } from '../../content/fixtures/QuranAudioAssets';
 import { AUDIO_SOURCE } from '../../services/quran/FixtureQuranProvider';
 import type { Ayah, QuranTextLayer, QuranWord, Surah } from '../../types/quran';
@@ -21,9 +23,11 @@ function Source({ayah}:{ayah:Ayah}) {return <Text style={styles.source}>Arabic: 
 function SourceLayerCredit({layer}:{layer:QuranTextLayer}) {return <Text style={styles.source}>{layer.source.name} · version {layer.source.version}{'\n'}{layer.source.reference}</Text>;}
 function Transliteration({layer,fontSize}:{layer:QuranTextLayer;fontSize:number}) {return <Text selectable style={[styles.body,{fontSize:Math.max(16,fontSize),lineHeight:Math.max(26,fontSize*1.65)}]}>{sourceTextRuns(layer.text).map((run,index)=><Text key={index} style={{fontWeight:run.bold?'700':'400',textDecorationLine:run.underline?'underline':'none'}}>{run.text}</Text>)}</Text>;}
 function PublishedMeaning({ayah}:{ayah:Ayah}) {return ayah.publishedMeaning?<><Text style={styles.subtitle}>Published meaning and notes</Text><Text selectable style={styles.body}>{ayah.publishedMeaning.text}</Text>{ayah.publisherNotes&&<><Text style={styles.reference}>Publisher notes</Text><Text selectable style={styles.body}>{ayah.publisherNotes.text}</Text></>}<SourceLayerCredit layer={ayah.publishedMeaning}/></>:null;}
+function Tafsir({layer,fontSize}:{layer:QuranTextLayer;fontSize:number}) {return <><Text style={styles.subtitle}>Tafsir · read together</Text><Text style={styles.muted}>This is the publisher’s explanation. Read one paragraph at a time with a parent or teacher and ask about words you do not know.</Text>{sourceTextParagraphs(layer.text).map((paragraph,index)=><Text key={index} selectable accessibilityRole={paragraph.heading?'header':undefined} style={[styles.body,{fontSize:Math.max(18,fontSize*0.7),lineHeight:Math.max(30,fontSize*1.15)}]}>{paragraph.runs.map((run,position)=><Text key={position} style={{fontWeight:run.bold||paragraph.heading?'700':'400',fontStyle:run.italic?'italic':'normal',textDecorationLine:run.underline?'underline':'none'}}>{run.text}</Text>)}</Text>)}<SourceLayerCredit layer={layer}/></>;}
 
 export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEnabled=true}:QuranScreenProps) {
-  const repository = useMemo(()=>new QuranRepository(undefined,process.env.EXPO_PUBLIC_QF_ENV === 'prelive' ? 'prelive' : 'production'),[]);
+  const [environment,setEnvironment]=useState(process.env.EXPO_PUBLIC_QF_ENV === 'prelive' ? 'prelive' : 'production');
+  const repository = useMemo(()=>new QuranRepository(undefined,environment),[environment]);
   const chapterRequest = useMemo(()=>new LatestRequest(),[]);
   const [view,setView]=useState<ViewName>('home');
   const [chapters,setChapters]=useState<Surah[]>([]);
@@ -42,8 +46,22 @@ export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEna
   const [quizAnswer,setQuizAnswer]=useState<string>();
   const [quizSaved,setQuizSaved]=useState(false);
   const quizSaveLock=useRef(false);
-  useEffect(()=>{let alive=true;repository.chapters().then(data=>{if(alive)setChapters(data);}).catch(e=>{if(alive)setMessage(String(e.message));});return()=>{alive=false;};},[repository]);
-  useEffect(()=>{let alive=true;if(childId)repository.bookmarks(childId).then(data=>{if(alive)setBookmarks(data);}).catch(e=>{if(alive)setMessage(e.message);});return()=>{alive=false;};},[childId,repository]);
+  const readingLocation=useRef<{surah?:number;ayah?:string}>({});
+  useEffect(()=>{readingLocation.current={surah:surah?.number,ayah:selected?.key};},[surah?.number,selected?.key]);
+  // Parent downloads and connection changes are reflected when this screen regains focus.
+  useFocusEffect(useCallback(()=>{
+    let alive=true;
+    void(async()=>{
+      const connection=await configuredContentConnection().catch(()=>null);
+      if(!alive)return;
+      if(connection&&connection.environment!==environment){setEnvironment(connection.environment);return;}
+      const [data,saved]=await Promise.all([repository.chapters(),childId?repository.bookmarks(childId):Promise.resolve([])]);
+      if(!alive)return;setChapters(data);setBookmarks(saved);
+      const location=readingLocation.current;
+      if(location.surah){const request=chapterRequest.begin();const fresh=await repository.verses(location.surah);if(alive&&chapterRequest.isCurrent(request)){setAyahs(fresh);setSelected(old=>old?fresh.find(a=>a.key===old.key):undefined);setSurah(data.find(c=>c.number===location.surah));setBusy(false);}}
+    })().catch(()=>{if(alive)setMessage('We could not open your saved reading. Try again or ask a parent for help.');});
+    return()=>{alive=false;chapterRequest.cancel();};
+  },[repository,chapterRequest,childId,environment]));
   useEffect(()=>()=>chapterRequest.cancel(),[chapterRequest]);
   async function openSurah(chapter:Surah,ayahKey?:string) {
     const request=chapterRequest.begin();
@@ -54,14 +72,14 @@ export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEna
       setAyahs(data);
       if(ayahKey){const found=data.find(a=>a.key===ayahKey);setSelected(found);if(found)setView('detail');}
     }
-    catch(e){if(chapterRequest.isCurrent(request))setMessage(e instanceof Error?e.message:'Unable to open this surah.');}
+    catch{if(chapterRequest.isCurrent(request))setMessage('This reading could not open. Try again or choose one of your offline surahs.');}
     finally{if(chapterRequest.isCurrent(request))setBusy(false);}
   }
   async function bookmark(ayah:Ayah) {
     if(!childId){setMessage('Choose a child profile to save bookmarks.');return;}
-    try {const saved=await repository.toggleBookmark(childId,ayah.key);setBookmarks(old=>saved?[...old,ayah.key]:old.filter(k=>k!==ayah.key));setMessage(saved?'Ayah bookmarked.':'Bookmark removed.');}catch(e){setMessage(e instanceof Error?e.message:'Bookmark could not be saved.');}
+    try {const saved=await repository.toggleBookmark(childId,ayah.key);setBookmarks(old=>saved?[...old,ayah.key]:old.filter(k=>k!==ayah.key));setMessage(saved?'Ayah bookmarked.':'Bookmark removed.');}catch{setMessage('Your bookmark could not be saved. Try again or ask a parent for help.');}
   }
-  async function complete(id:string,score?:number) {setBusy(true);try{await onComplete(id,score);setMessage('MashaAllah! Your practice is saved.');return true;}catch(e){setMessage(e instanceof Error?e.message:'Progress could not be saved.');return false;}finally{setBusy(false);}}
+  async function complete(id:string,score?:number) {setBusy(true);try{await onComplete(id,score);setMessage('MashaAllah! Your practice is saved.');return true;}catch{setMessage('Your practice could not be saved. Try again or ask a parent for help.');return false;}finally{setBusy(false);}}
   function startQuiz(){setQuizIndex(0);setQuizScore(0);setQuizAnswer(undefined);setQuizSaved(false);quizSaveLock.current=false;setMessage('');setView('quiz');}
   async function saveQuiz(){
     if(quizSaveLock.current||quizSaved)return;
@@ -71,7 +89,11 @@ export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEna
     else quizSaveLock.current=false;
   }
   function detail(ayah:Ayah,mode:ViewName) {setSelected(ayah);setMemorizeEndKey(ayah.key);setWordIndex(undefined);setPlaybackWordPosition(undefined);setMessage('');setView(mode);}
-  const tracks:AudioTrack[]=ayahs.map(a=>({id:a.key,title:`Ayah ${a.key}`,uri:a.audio?.localUri??a.audio?.url,asset:a.audio?.source.name===AUDIO_SOURCE.name?quranAudioAssets[a.key]:undefined,sourceLabel:a.audio?`${a.audio.reciter} · ${a.audio.source.name}`:'Recitation not downloaded'}));
+  const tracks:AudioTrack[]=ayahs.map(a=>{
+    const bundled=quranAudioAssets[a.key];
+    const useBundled=!a.audio?.localUri&&bundled!==undefined&&(!networkEnabled||a.audio?.source.name===AUDIO_SOURCE.name);
+    return {id:a.key,title:`Ayah ${a.key}`,uri:a.audio?.localUri??a.audio?.url,asset:useBundled?bundled:undefined,sourceLabel:useBundled?`Alafasy · ${AUDIO_SOURCE.name}`:a.audio?`${a.audio.reciter} · ${a.audio.source.name}`:'Ask a parent to add this recording'};
+  });
   const selectedTrack=selected&&audioEnabled?tracks.filter(t=>t.id===selected.key):[];
   const memorizeAyahs=selected?selectAyahRange(ayahs,selected.key,memorizeEndKey):[];
   const memorizeChoices=selected?selectAyahRange(ayahs,selected.key,ayahs.at(-1)?.key):[];
@@ -119,8 +141,9 @@ export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEna
       {selected.transliteration?<><Transliteration layer={selected.transliteration} fontSize={fontSize}/><SourceLayerCredit layer={selected.transliteration}/><Text style={styles.muted}>Use the Arabic and sourced recitation when practising pronunciation.</Text></>:<Text style={styles.body}>Whole-ayah transliteration is unavailable for this ayah.</Text>}
       <Text style={styles.subtitle}>English translation</Text><Text style={styles.translation}>{selected.translation?.text??'No English translation downloaded.'}</Text><Source ayah={selected}/>
       <PublishedMeaning ayah={selected}/>
-      {selected.tafsir&&<><Text style={styles.subtitle}>Tafsir</Text><Text selectable style={styles.body}>{selected.tafsir.text}</Text><SourceLayerCredit layer={selected.tafsir}/></>}
-      {!selected.publishedMeaning&&!selected.tafsir&&<Text style={styles.muted}>Additional published meaning and notes are unavailable for this ayah. Read its attributed translation with a parent or teacher.</Text>}
+      {selected.tafsir&&<Tafsir layer={selected.tafsir} fontSize={fontSize}/>}
+      {!selected.tafsir&&<Text style={styles.muted}>For a fuller explanation, read with a parent or teacher. A parent can add a published tafsir when one is available.</Text>}
+      {!selected.publishedMeaning&&!selected.tafsir&&<Text style={styles.muted}>{selected.translation?'Read the attributed translation with a parent or teacher.':'Ask a parent to add a published translation, or read the Arabic together with a teacher.'}</Text>}
       <View style={styles.row}><Button label="Word by word" onPress={()=>setView('words')}/><Button label="Memorize" secondary onPress={()=>{setMemorizeEndKey(selected.key);setView('memorize');}}/><Button label={bookmarks.includes(selected.key)?'Remove bookmark':'Bookmark'} secondary onPress={()=>void bookmark(selected)}/></View>
       <View style={styles.row}><Button label="Previous ayah" secondary disabled={selected.ayahNumber<=1} onPress={()=>setSelected(ayahs[selected.ayahNumber-2])}/><Button label="Next ayah" secondary disabled={selected.ayahNumber>=ayahs.length} onPress={()=>setSelected(ayahs[selected.ayahNumber])}/></View>
     </View>}

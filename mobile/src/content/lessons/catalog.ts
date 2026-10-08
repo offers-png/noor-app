@@ -99,7 +99,8 @@ export const duaLessons: EducationLesson[] = duaFixtures.map(dua => ({ id: dua.i
   sections: [{ title: 'Learn together', body: 'Read the Arabic with a parent or teacher. Transliteration is a reading aid and does not replace learning pronunciation.', kind: 'activity' }],
   discussion: 'Choose one short phrase to practice together today.', quiz: [] }));
 
-export const allLessons: EducationLesson[] = [...hadithLessons, ...islamLessons, ...duaLessons];
+export const allLessons: EducationLesson[] = [...hadithLessons, ...islamLessons, ...duaLessons]
+  .map(lesson => ({ ...lesson, ageRange: { min: 5, max: 15 } }));
 export const lessonSourceRegistry = [...new Map([
   ...allLessons.map(lesson => lesson.source), prayerTimesSource, qiblahSource, postureSource,
 ].map(source => [source.sourceReference, source])).values()];

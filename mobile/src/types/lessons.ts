@@ -18,10 +18,20 @@ export interface ContentReview {
   reviewer: string | null;
   approvedAt: string | null;
   approvedVersion: string | null;
+  reviewedContentHash?: string;
   version: string;
+  /** Draft pack origin; local publication requires explicit versioned parent review. */
   developmentOnly: boolean;
   attestation?: { kind: 'parent-entered'; qualificationConfirmed: true; recordedAt: string };
+  publication?: {
+    kind: 'parent-local';
+    version: string;
+    publishedAt: string;
+    parentSuitabilityConfirmed: true;
+    sourcePermissionConfirmed: true;
+  };
 }
+export interface LessonAgeRange { min: number; max: number }
 export interface LessonSection {
   title: string;
   body: string;
@@ -44,6 +54,8 @@ export interface EducationLesson {
   hadithId?: string;
   duaId?: string;
   stepByStep?: boolean;
+  /** Proposed until the exact version is reviewed and published by the parent. */
+  ageRange?: LessonAgeRange;
 }
 export interface HadithRecord {
   readonly id: string;

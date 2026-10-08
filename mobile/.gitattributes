@@ -6,3 +6,4 @@ src/content/fixtures/quran-transliteration-verbatim.txt -text -whitespace
 src/content/fixtures/quran-transliteration.json -text -whitespace
 src/content/fixtures/quran-meaning.json -text -whitespace
 src/content/fixtures/quran-meaning-source/** -text -whitespace
+tests/fixtures/tanzil/*.txt -text -whitespace
