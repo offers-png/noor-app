@@ -26,7 +26,10 @@ async function publisherFile(response) {
   return bytes;
 }
 
-/** Shared handler used by the existing Node server and the hosted Netlify function. */
+/**
+ * Shared handler used by the existing Node server and the hosted Netlify function.
+ * @param {{env?: Record<string,string|undefined>, fetcher?: typeof fetch, now?: ()=>number}} [options]
+ */
 export function createContentHandler({env=process.env,fetcher=fetch,now=Date.now}={}) {
   const environment = env.QF_ENV || 'production';
   if (!['prelive','production'].includes(environment)) throw new Error('QF_ENV must be prelive or production');
@@ -102,6 +105,7 @@ export function createContentHandler({env=process.env,fetcher=fetch,now=Date.now
   };
 }
 
+/** @param {{env?: Record<string,string|undefined>, fetcher?: typeof fetch, now?: ()=>number}} [options] */
 export function createProxy(options={}) {
   const handler=createContentHandler(options);
   return http.createServer(async(req,res)=>{
