@@ -42,6 +42,8 @@ export interface Ayah {
   words?: QuranWord[];
   audio?: QuranAudio;
   tafsir?: QuranTextLayer;
+  publishedMeaning?: QuranTextLayer;
+  publisherNotes?: QuranTextLayer;
 }
 
 export type ResourceGroup = 'quran_core' | 'mushafs' | 'translations' | 'word_by_word_translations' | 'word_by_word_transliterations' | 'tafsirs' | 'recitations' | 'chapter_recitations' | 'articles';

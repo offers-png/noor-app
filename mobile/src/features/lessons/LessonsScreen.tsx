@@ -15,6 +15,8 @@ import { NarrationButton } from '../../services/audio/NarrationButton';
 import { useAppStore } from '../../state/appStore';
 import type { EducationLesson } from '../../types/lessons';
 import { LessonIllustration } from './LessonIllustration';
+import { SourceReadingLibrary } from './SourceReadingLibrary';
+import { hasAvailableEditorialLessons } from './sourceReadingRepository';
 
 export interface LessonsScreenProps {
   category: 'hadith' | 'islam' | 'duas';
@@ -31,7 +33,25 @@ export function LessonsScreen(props: LessonsScreenProps) {
   const audioEnabled = useAppStore(state => state.settings.audioEnabled);
   const childId = props.childId ?? selectedChildId ?? undefined;
   const title = props.category === 'hadith' ? 'Hadith' : props.category === 'duas' ? 'Duas' : 'Learn Islam';
-  return <Screen title={title}><LessonContent key={`${props.category}:${childId}:${props.developmentContent}`} {...props} childId={childId} networkAllowed={networkAllowed} narrationEnabled={audioEnabled && (props.narrationEnabled ?? true)} /></Screen>;
+  return <Screen title={title}><LessonEntry key={`${props.category}:${childId}:${props.developmentContent}`} {...props} childId={childId} networkAllowed={networkAllowed} narrationEnabled={audioEnabled && (props.narrationEnabled ?? true)} /></Screen>;
+}
+
+function LessonEntry(props: LessonsScreenProps & { networkAllowed: boolean }) {
+  const [education, setEducation] = useState(false);
+  const [hasEducation, setHasEducation] = useState(false);
+  useFocusEffect(useCallback(() => {
+    if (props.category === 'islam') return;
+    let mounted = true;
+    setHasEducation(false);
+    const category = props.category;
+    void getDb().then(db => hasAvailableEditorialLessons(db, category, props.developmentContent)).then(available => {
+      if (mounted) setHasEducation(available);
+    }).catch(() => { if (mounted) setHasEducation(false); });
+    return () => { mounted = false; };
+  }, [props.category, props.developmentContent]));
+  if (props.category === 'islam') return <LessonContent {...props} />;
+  if (!education) return <SourceReadingLibrary category={props.category} childId={props.childId} fontSize={props.fontSize} networkAllowed={props.networkAllowed} audioEnabled={props.narrationEnabled ?? false} onComplete={props.onComplete} onLessons={hasEducation ? () => setEducation(true) : undefined} />;
+  return <View style={styles.stack}><Button label="← Sourced readings" secondary onPress={() => setEducation(false)} /><LessonContent {...props} /></View>;
 }
 
 function LessonContent({ category, onComplete, developmentContent, fontSize, childId, narrationEnabled = false, networkAllowed }: LessonsScreenProps & { networkAllowed: boolean }) {

@@ -7,10 +7,10 @@ import { QuranRepository } from '../../services/quran/QuranRepository';
 import { LatestRequest } from '../../services/quran/LatestRequest';
 import { parseAyahReference } from '../../services/quran/QuranNavigation';
 import { activeWordPosition } from '../../services/quran/QuranTiming';
-import { arabicDisplayProps } from '../../services/quran/presentation';
+import { arabicDisplayProps, sourceTextRuns } from '../../services/quran/presentation';
 import { quranAudioAssets } from '../../content/fixtures/QuranAudioAssets';
 import { AUDIO_SOURCE } from '../../services/quran/FixtureQuranProvider';
-import type { Ayah, QuranWord, Surah } from '../../types/quran';
+import type { Ayah, QuranTextLayer, QuranWord, Surah } from '../../types/quran';
 
 type ViewName = 'home' | 'list' | 'reader' | 'detail' | 'words' | 'memorize' | 'player' | 'saved' | 'quiz';
 export interface QuranScreenProps { onComplete: (lessonId: string, score?: number) => Promise<void>; fontSize: number; networkEnabled: boolean; childId?: number; audioEnabled?:boolean }
@@ -18,6 +18,9 @@ function Button({ label, onPress, secondary = false, disabled = false }: {label:
   return <Pressable accessibilityRole="button" accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={[styles.button,secondary && styles.secondary, disabled && styles.disabled]}><Text style={[styles.buttonText,secondary && styles.secondaryText]}>{label}</Text></Pressable>;
 }
 function Source({ayah}:{ayah:Ayah}) {return <Text style={styles.source}>Arabic: {ayah.source.name} · {ayah.source.version}{ayah.translation ? `\nTranslation by ${ayah.translation.source.translator ?? ayah.translation.source.name}` : ''}</Text>;}
+function SourceLayerCredit({layer}:{layer:QuranTextLayer}) {return <Text style={styles.source}>{layer.source.name} · version {layer.source.version}{'\n'}{layer.source.reference}</Text>;}
+function Transliteration({layer,fontSize}:{layer:QuranTextLayer;fontSize:number}) {return <Text selectable style={[styles.body,{fontSize:Math.max(16,fontSize),lineHeight:Math.max(26,fontSize*1.65)}]}>{sourceTextRuns(layer.text).map((run,index)=><Text key={index} style={{fontWeight:run.bold?'700':'400',textDecorationLine:run.underline?'underline':'none'}}>{run.text}</Text>)}</Text>;}
+function PublishedMeaning({ayah}:{ayah:Ayah}) {return ayah.publishedMeaning?<><Text style={styles.subtitle}>Published meaning and notes</Text><Text selectable style={styles.body}>{ayah.publishedMeaning.text}</Text>{ayah.publisherNotes&&<><Text style={styles.reference}>Publisher notes</Text><Text selectable style={styles.body}>{ayah.publisherNotes.text}</Text></>}<SourceLayerCredit layer={ayah.publishedMeaning}/></>:null;}
 
 export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEnabled=true}:QuranScreenProps) {
   const repository = useMemo(()=>new QuranRepository(undefined,process.env.EXPO_PUBLIC_QF_ENV === 'prelive' ? 'prelive' : 'production'),[]);
@@ -94,8 +97,33 @@ export function QuranScreen({onComplete,fontSize,networkEnabled,childId,audioEna
       {!filtered.length&&<Text style={styles.muted}>No surahs match this search.</Text>}
     </>}
     {view==='saved'&&<>{bookmarks.map(key=><Button key={key} label={`Open ayah ${key}`} secondary onPress={()=>{const chapter=chapters.find(s=>s.number===Number(key.split(':')[0]));if(chapter)void openSurah(chapter,key);}}/>)}{!bookmarks.length&&<Text style={styles.muted}>Use Bookmark beside an ayah to keep it here.</Text>}</>}
-    {view==='reader'&&<><Text style={styles.muted}>{surah?.englishName} · {surah?.revelationType} · {surah?.ayahCount} ayahs</Text>{!busy&&!ayahs.length&&<View style={styles.card}><Text style={styles.subtitle}>This surah is not downloaded yet</Text><Text style={styles.body}>Ask a parent to sync Quran text in Content Downloads. The five included surahs are available offline now.</Text><Button label="Choose an offline surah" onPress={()=>setView('home')}/></View>}{!!ayahs.length&&<><View style={styles.row}><Button label="Listen to surah" onPress={()=>setView('player')}/><Button label="Reader quiz" secondary onPress={startQuiz}/></View>{ayahs.map(ayah=><View key={ayah.key} style={styles.card}><Text style={styles.reference}>{ayah.key}</Text><Text selectable accessibilityLabel={`Arabic ayah ${ayah.key}`} style={[styles.arabic,arabicDisplayProps(fontSize)]}>{ayah.canonicalText}</Text><Text style={styles.translation}>{ayah.translation?.text??'An English translation is not downloaded.'}</Text><Source ayah={ayah}/><View style={styles.row}><Button label="Play / detail" onPress={()=>detail(ayah,'detail')}/><Button label="Word by word" secondary onPress={()=>detail(ayah,'words')}/><Button label="Memorize" secondary onPress={()=>detail(ayah,'memorize')}/><Button label={bookmarks.includes(ayah.key)?'Bookmarked':'Bookmark'} secondary onPress={()=>void bookmark(ayah)}/></View></View>)}<Button disabled={busy} label="Complete reading lesson" onPress={()=>void complete(`quran:surah:${surah?.number}`)}/></>}</>}
-    {view==='detail'&&selected&&<View style={styles.card}><Text style={styles.reference}>{selected.key}</Text><Text selectable style={[styles.arabic,arabicDisplayProps(fontSize)]}>{selected.canonicalText}</Text>{audioEnabled?<AudioControls key={selected.key} tracks={selectedTrack} networkAllowed={networkEnabled}/>:<Text style={styles.muted}>Audio is disabled in Parent Mode.</Text>}<Text style={styles.subtitle}>Transliteration</Text><Text style={styles.body}>{selected.transliteration?.text??'A licensed transliteration has not been downloaded. Ask a parent to add a published resource.'}</Text><Text style={styles.subtitle}>English translation</Text><Text style={styles.translation}>{selected.translation?.text??'No English translation downloaded.'}</Text><Source ayah={selected}/><Text style={styles.subtitle}>Meaning and explanation</Text><Text style={styles.body}>{selected.tafsir?.text??'A reviewed explanation is not available for this ayah yet. Read the attributed translation with a parent or teacher.'}</Text>{selected.tafsir&&<Text style={styles.source}>{selected.tafsir.source.name}</Text>}<View style={styles.row}><Button label="Word by word" onPress={()=>setView('words')}/><Button label="Memorize" secondary onPress={()=>{setMemorizeEndKey(selected.key);setView('memorize');}}/><Button label={bookmarks.includes(selected.key)?'Remove bookmark':'Bookmark'} secondary onPress={()=>void bookmark(selected)}/></View><View style={styles.row}><Button label="Previous ayah" secondary disabled={selected.ayahNumber<=1} onPress={()=>setSelected(ayahs[selected.ayahNumber-2])}/><Button label="Next ayah" secondary disabled={selected.ayahNumber>=ayahs.length} onPress={()=>setSelected(ayahs[selected.ayahNumber])}/></View></View>}
+    {view==='reader'&&<>
+      <Text style={styles.muted}>{surah?.englishName} · {surah?.revelationType} · {surah?.ayahCount} ayahs</Text>
+      {!busy&&!ayahs.length&&<View style={styles.card}><Text style={styles.subtitle}>This surah is not downloaded yet</Text><Text style={styles.body}>Ask a parent to sync Quran text in Content Downloads. The five included surahs are available offline now.</Text><Button label="Choose an offline surah" onPress={()=>setView('home')}/></View>}
+      {!!ayahs.length&&<>
+        <View style={styles.row}><Button label="Listen to surah" onPress={()=>setView('player')}/><Button label="Reader quiz" secondary onPress={startQuiz}/></View>
+        {ayahs.map(ayah=><View key={ayah.key} style={styles.card}>
+          <Text style={styles.reference}>{ayah.key}</Text>
+          <Text selectable accessibilityLabel={`Arabic ayah ${ayah.key}`} style={[styles.arabic,arabicDisplayProps(fontSize)]}>{ayah.canonicalText}</Text>
+          {ayah.transliteration&&<><Text style={styles.reference}>Transliteration</Text><Transliteration layer={ayah.transliteration} fontSize={fontSize}/><SourceLayerCredit layer={ayah.transliteration}/></>}
+          <Text style={styles.translation}>{ayah.translation?.text??'An English translation is not downloaded.'}</Text><Source ayah={ayah}/>
+          <View style={styles.row}><Button label="Play / detail" onPress={()=>detail(ayah,'detail')}/><Button label="Word by word" secondary onPress={()=>detail(ayah,'words')}/><Button label="Memorize" secondary onPress={()=>detail(ayah,'memorize')}/><Button label={bookmarks.includes(ayah.key)?'Bookmarked':'Bookmark'} secondary onPress={()=>void bookmark(ayah)}/></View>
+        </View>)}
+        <Button disabled={busy} label="Complete reading lesson" onPress={()=>void complete(`quran:surah:${surah?.number}`)}/>
+      </>}
+    </>}
+    {view==='detail'&&selected&&<View style={styles.card}>
+      <Text style={styles.reference}>{selected.key}</Text><Text selectable style={[styles.arabic,arabicDisplayProps(fontSize)]}>{selected.canonicalText}</Text>
+      {audioEnabled?<AudioControls key={selected.key} tracks={selectedTrack} networkAllowed={networkEnabled}/>:<Text style={styles.muted}>Audio is disabled in Parent Mode.</Text>}
+      <Text style={styles.subtitle}>Transliteration</Text>
+      {selected.transliteration?<><Transliteration layer={selected.transliteration} fontSize={fontSize}/><SourceLayerCredit layer={selected.transliteration}/><Text style={styles.muted}>Use the Arabic and sourced recitation when practising pronunciation.</Text></>:<Text style={styles.body}>Whole-ayah transliteration is unavailable for this ayah.</Text>}
+      <Text style={styles.subtitle}>English translation</Text><Text style={styles.translation}>{selected.translation?.text??'No English translation downloaded.'}</Text><Source ayah={selected}/>
+      <PublishedMeaning ayah={selected}/>
+      {selected.tafsir&&<><Text style={styles.subtitle}>Tafsir</Text><Text selectable style={styles.body}>{selected.tafsir.text}</Text><SourceLayerCredit layer={selected.tafsir}/></>}
+      {!selected.publishedMeaning&&!selected.tafsir&&<Text style={styles.muted}>Additional published meaning and notes are unavailable for this ayah. Read its attributed translation with a parent or teacher.</Text>}
+      <View style={styles.row}><Button label="Word by word" onPress={()=>setView('words')}/><Button label="Memorize" secondary onPress={()=>{setMemorizeEndKey(selected.key);setView('memorize');}}/><Button label={bookmarks.includes(selected.key)?'Remove bookmark':'Bookmark'} secondary onPress={()=>void bookmark(selected)}/></View>
+      <View style={styles.row}><Button label="Previous ayah" secondary disabled={selected.ayahNumber<=1} onPress={()=>setSelected(ayahs[selected.ayahNumber-2])}/><Button label="Next ayah" secondary disabled={selected.ayahNumber>=ayahs.length} onPress={()=>setSelected(ayahs[selected.ayahNumber])}/></View>
+    </View>}
     {view==='words'&&selected&&<View style={styles.card}>
       <Text style={styles.reference}>{selected.key}</Text>
       <Text style={styles.body}>Tap an Arabic word to focus on it. Sourced word meanings appear after they are downloaded.</Text>

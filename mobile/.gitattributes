@@ -2,3 +2,7 @@
 src/content/fixtures/quran-*-license.html -text -whitespace
 src/content/fixtures/quran-tanzil-license.txt -text -whitespace
 src/content/fixtures/quran-seed-verbatim.txt -text -whitespace
+src/content/fixtures/quran-transliteration-verbatim.txt -text -whitespace
+src/content/fixtures/quran-transliteration.json -text -whitespace
+src/content/fixtures/quran-meaning.json -text -whitespace
+src/content/fixtures/quran-meaning-source/** -text -whitespace

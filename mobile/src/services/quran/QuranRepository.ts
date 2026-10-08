@@ -6,6 +6,8 @@ import { audioCacheKey, resolveQuranAudioUrl } from './QuranAudioDownloads';
 import { verseIdForReference } from './QuranNavigation';
 import { sourcedWordTimings } from './QuranTiming';
 import { readQuranResourcePreferences, selectActiveQuranResource, type QuranResourcePreferences } from './QuranResourcePreferences';
+import { bundledTransliteration } from '../../content/fixtures/QuranTransliteration';
+import { bundledPublishedMeaning } from '../../content/fixtures/QuranMeaning';
 
 const seedOperations = new WeakMap<Database, Promise<void>>();
 
@@ -95,6 +97,11 @@ export class QuranRepository {
   }
   private layers(ayah:Ayah,core:ResourceSnapshot|undefined,resources:ResourceSnapshot[],preferences:QuranResourcePreferences):Ayah{
     const key=ayah.key;
+    // Apply the current bundled edition at read time, including databases created by earlier APKs.
+    // Separate source layers never change the persisted canonical Arabic or a chosen QF resource.
+    ayah.transliteration ??= bundledTransliteration(key);
+    const published = bundledPublishedMeaning(key);
+    if (published) { ayah.publishedMeaning = published.meaning; ayah.publisherNotes = published.notes; }
     const translation = selectActiveQuranResource(resources,'translations',preferences);
     const translated = translation?.records.find(r => r.verse_key === key && typeof r.text === 'string');
     if (translated && translation) ayah.translation = { text: translated.text as string, source: { ...qfSource(translation,key), translator: typeof translated.translator === 'string' ? translated.translator : translation.attribution?.translator } };
@@ -117,7 +124,7 @@ export class QuranRepository {
       const translit = wordTransliterations?.records.find(r => r.word_id === w.id && typeof r.text === 'string');
       return { id:String(w.id), position:Number(w.position), canonicalText:w.text_indopak as string, source:core?qfSource(core,`${key}:${w.position}`):ayah.source, translation:trans && wordTranslations ? {text:trans.text as string, source:qfSource(wordTranslations,`${key}:${w.position}`)} : undefined, transliteration:translit && wordTransliterations ? {text:translit.text as string,source:qfSource(wordTransliterations,`${key}:${w.position}`)} : undefined };
     });
-    // A transliteration is a separate source layer; no automatic transliteration of Arabic.
+    // Word transliteration has separate alignment; never split a whole-verse fixture into words.
     return ayah;
   }
   async bookmarks(childId: number): Promise<string[]> { return (await (await this.db()).getAllAsync<{item_id:string}>('SELECT item_id FROM bookmarks WHERE child_id=? AND kind=? ORDER BY created_at DESC', childId, 'quran')).map(r=>r.item_id); }
