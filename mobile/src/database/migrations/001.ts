@@ -1,0 +1,24 @@
+export const schema = `
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS children (id INTEGER PRIMARY KEY AUTOINCREMENT,nickname TEXT NOT NULL,age INTEGER,avatar TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS lessons (id TEXT PRIMARY KEY,category TEXT NOT NULL,status TEXT NOT NULL,payload_json TEXT NOT NULL,source_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS lesson_progress (child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,lesson_id TEXT NOT NULL,status TEXT NOT NULL,score REAL,attempts INTEGER NOT NULL DEFAULT 1,last_practiced TEXT NOT NULL,completed_at TEXT,memorization_level TEXT,PRIMARY KEY(child_id,lesson_id));
+CREATE TABLE IF NOT EXISTS surahs (number INTEGER PRIMARY KEY,payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ayahs (verse_key TEXT PRIMARY KEY,surah_number INTEGER NOT NULL,ayah_number INTEGER NOT NULL,canonical_text TEXT NOT NULL,source_json TEXT NOT NULL,payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS quran_resources (resource TEXT NOT NULL,resource_id TEXT NOT NULL,version TEXT,payload_json TEXT NOT NULL,PRIMARY KEY(resource,resource_id));
+CREATE TABLE IF NOT EXISTS quran_sync (resource TEXT NOT NULL,resource_id TEXT NOT NULL,version TEXT,last_sync TEXT,sync_token TEXT,download_status TEXT,PRIMARY KEY(resource,resource_id));
+CREATE TABLE IF NOT EXISTS hadiths (id TEXT PRIMARY KEY,canonical_text TEXT,source_json TEXT NOT NULL,payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS hadith_lessons (id TEXT PRIMARY KEY,hadith_id TEXT,status TEXT NOT NULL,payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS duas (id TEXT PRIMARY KEY,payload_json TEXT NOT NULL,source_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS quiz_questions (id TEXT PRIMARY KEY,lesson_id TEXT NOT NULL,payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS quiz_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT,child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,lesson_id TEXT NOT NULL,score REAL NOT NULL,answers_json TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS memorization_progress (child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,verse_key TEXT NOT NULL,level TEXT NOT NULL,rating TEXT,last_practiced TEXT NOT NULL,PRIMARY KEY(child_id,verse_key));
+CREATE TABLE IF NOT EXISTS bookmarks (child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,kind TEXT NOT NULL,item_id TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(child_id,kind,item_id));
+CREATE TABLE IF NOT EXISTS downloads (id TEXT PRIMARY KEY,resource TEXT,resource_id TEXT,status TEXT NOT NULL,bytes INTEGER,total_bytes INTEGER,path TEXT,error TEXT);
+CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS content_sources (id TEXT PRIMARY KEY,payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS learning_activity (id INTEGER PRIMARY KEY AUTOINCREMENT,child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,lesson_id TEXT NOT NULL,practiced_at TEXT NOT NULL);
+INSERT OR IGNORE INTO migrations (version) VALUES (1);
+`;

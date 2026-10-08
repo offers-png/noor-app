@@ -1,0 +1,9 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { canShowContent,preserveCanonical,textDirection } from '../src/utils/contentPolicy';
+import { ParentPin } from '../src/services/parent/pin';
+import { derivePin } from '../src/services/parent/pinCrypto';
+test('production PIN derivation is salted and deterministic',()=>{const a=derivePin('283947','salt-a');assert.equal(a,derivePin('283947','salt-a'));assert.notEqual(a,derivePin('283947','salt-b'));assert.notEqual(a,derivePin('000000','salt-a'));assert.equal(a.length,64);});
+test('unreviewed educational content cannot enter production child mode',()=>{for(const status of ['draft','needs_review','approved'] as const)assert.equal(canShowContent({status},false),false);assert.equal(canShowContent({status:'published'},false),false);assert.equal(canShowContent({status:'published',reviewer:'reviewer',approvedAt:'2026-10-07'},false),true);assert.equal(canShowContent({status:'needs_review'},true),true);});
+test('Arabic display keeps exact text and per-block RTL',()=>{const original='ٱلْيَتِيمَ';assert.equal(preserveCanonical(original),original);assert.equal(textDirection('ar'),'rtl');assert.equal(textDirection('en'),'ltr');});
+test('PIN requires six digits, salted storage, lockout, and recovery after timeout',async()=>{const values=new Map<string,string>();let now=0;const pin=new ParentPin({get:async k=>values.get(k)??null,set:async(k,v)=>{values.set(k,v);}},{random:async()=>'random-salt',derive:async(p,s)=>`digest:${s}:${p}`},()=>now);assert.equal(await pin.configured(),false);await assert.rejects(pin.set('123'));await pin.set('283947');assert.equal(await pin.verify('283947'),true);for(let i=0;i<5;i++)assert.equal(await pin.verify('000000'),false);await assert.rejects(pin.verify('283947'),/wait/);now=61000;assert.equal(await pin.verify('283947'),true);assert.equal(JSON.parse(values.get('parent-pin')!).salt,'random-salt');});
