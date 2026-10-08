@@ -72,6 +72,7 @@ export const arabicModules = [
   { id: 'joining', title: 'Joining Letters', description: 'Learn which letters connect' },
   { id: 'words', title: 'Simple Words', description: 'Read short Arabic words' },
   { id: 'reading', title: 'Reading Practice', description: 'Try reading with the vowel marks' },
+  { id: 'numbers', title: 'Numbers 1–10', description: 'Arabic digits and number words' },
 ] as const;
 
 export const harakat = [
@@ -86,6 +87,30 @@ export const simpleWords = [
   { arabic: 'بَاب', name: 'baab', meaning: 'door', letters: 'Ba + Alif + Ba' },
   { arabic: 'بَيْت', name: 'bayt', meaning: 'house', letters: 'Ba + Ya + Ta' },
   { arabic: 'كِتَاب', name: 'kitaab', meaning: 'book', letters: 'Kaf + Ta + Alif + Ba' },
+  { arabic: 'قَلَم', name: 'qalam', meaning: 'pen', letters: 'Qaf + Lam + Mim' },
+  { arabic: 'شَمْس', name: 'shams', meaning: 'sun', letters: 'Shin + Mim + Sin' },
+  { arabic: 'قَمَر', name: 'qamar', meaning: 'moon', letters: 'Qaf + Mim + Ra' },
+  { arabic: 'وَلَد', name: 'walad', meaning: 'boy', letters: 'Waw + Lam + Dal' },
+  { arabic: 'بِنْت', name: 'bint', meaning: 'girl', letters: 'Ba + Nun + Ta' },
+];
+/** Arabic-Indic digits with the counting word (masculine form used when counting aloud). */
+export const arabicNumbers = [
+  { value: 1, digit: '١', word: 'وَاحِد', name: 'waahid' },
+  { value: 2, digit: '٢', word: 'اِثْنَان', name: 'ithnaan' },
+  { value: 3, digit: '٣', word: 'ثَلَاثَة', name: 'thalaatha' },
+  { value: 4, digit: '٤', word: 'أَرْبَعَة', name: 'arba‘a' },
+  { value: 5, digit: '٥', word: 'خَمْسَة', name: 'khamsa' },
+  { value: 6, digit: '٦', word: 'سِتَّة', name: 'sitta' },
+  { value: 7, digit: '٧', word: 'سَبْعَة', name: 'sab‘a' },
+  { value: 8, digit: '٨', word: 'ثَمَانِيَة', name: 'thamaaniya' },
+  { value: 9, digit: '٩', word: 'تِسْعَة', name: 'tis‘a' },
+  { value: 10, digit: '١٠', word: 'عَشَرَة', name: '‘ashara' },
+];
+export const numberQuestions: QuizQuestion[] = [
+  { id: 'number-3', type: 'multiple-choice', prompt: 'Which number is this?', arabic: '٣', options: [{ id: '2', label: '2' }, { id: '3', label: '3' }, { id: '7', label: '7' }], correctOptionId: '3', explanation: '٣ is 3, thalaatha.' },
+  { id: 'number-5', type: 'letter', prompt: 'Choose the Arabic digit for 5.', options: [{ id: '4', label: '٤' }, { id: '5', label: '٥' }, { id: '6', label: '٦' }], correctOptionId: '5', explanation: '٥ is 5, khamsa.' },
+  { id: 'number-10', type: 'multiple-choice', prompt: 'What does ‘ashara mean?', arabic: 'عَشَرَة', options: [{ id: '10', label: '10' }, { id: '1', label: '1' }, { id: '8', label: '8' }], correctOptionId: '10', explanation: '‘Ashara is 10: ١٠.' },
+  { id: 'number-order', type: 'order', prompt: 'Put these numbers in order from smallest.', items: [{ id: 'one', label: '١' }, { id: 'two', label: '٢' }, { id: 'three', label: '٣' }], correctOrder: ['one', 'two', 'three'], explanation: '١, ٢, ٣ are 1, 2, 3.' },
 ];
 
 export function letterQuiz(letter: ArabicLetter): QuizQuestion[] {

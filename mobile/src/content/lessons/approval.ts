@@ -4,7 +4,9 @@ import { reviewContentHash } from './reviewContent';
 // Only these source-backed bundled education drafts have a parent publication path.
 // Unknown development/import packs remain preview-only; review cannot grant rights.
 const parentReviewableIds = new Set(['hadith-1', 'hadith-6018', 'hadith-13', 'islam-five-pillars', 'islam-wudu', 'islam-salah',
-  'islam-story-nuh', 'islam-story-yunus', 'dua-before-eating', 'dua-forgiveness', 'dua-knowledge', 'dua-masjid-entry', 'dua-masjid-exit']);
+  'islam-story-nuh', 'islam-story-yunus', 'dua-before-eating', 'dua-forgiveness', 'dua-knowledge', 'dua-masjid-entry', 'dua-masjid-exit',
+  'islam-prayer-times', 'islam-prayer-ready', 'islam-six-beliefs', 'islam-salam', 'islam-parents',
+  'dua-quran-good-both-worlds', 'dua-quran-parents', 'dua-quran-knowledge', 'dua-quran-family']);
 export function canParentPublishLesson(lesson: EducationLesson): boolean {
   return !lesson.review.developmentOnly || parentReviewableIds.has(lesson.id);
 }

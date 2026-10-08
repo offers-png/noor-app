@@ -33,6 +33,7 @@ Routes:
 - GET /api/quran?environment=production&path=<URL-encoded relative /api/v4/... path> forwards supported Content API reads, sync pages and snapshots. The server fixes the upstream host from QF_ENV; callers cannot choose an upstream host.
 - GET /api/hadith/collections forwards official Sunnah.com collection metadata.
 - GET /api/hadith/:collection/:number forwards official Sunnah.com Arabic/English source text and grades unchanged.
+- GET /api/audio/alafasy/:surah (1–114) returns the verified Al Quran Cloud `ar.alafasy` per-ayah recording list for that surah. The server checks the edition, ayah count against Tanzil metadata, global ayah numbering and the fixed `cdn.islamic.network` URL pattern, and forwards only keys, numbers and URLs (no publisher text). Needs no credentials. Cached publicly for a day, as the publisher requests.
 - GET /api/resources/tanzil-arabic returns the original Tanzil Uthmani 1.1 download bytes.
 - GET /api/resources/tanzil-transliteration returns the original English transliteration download bytes. This edition is noncommercial; the client requires confirmation before downloading and installing it.
 

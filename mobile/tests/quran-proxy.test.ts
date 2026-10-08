@@ -39,3 +39,44 @@ test('server OAuth secrets never appear in returned content responses',async()=>
   const response=await invoke(server,`/api/quran?environment=production&path=${encodeURIComponent('/api/v4/chapters')}`);assert.equal(response.status,200);assert.equal(response.body.includes('server-secret'),false);assert.equal(response.body.includes('upstream-secret-token'),false);assert.equal(calls[0].url,'https://oauth2.quran.foundation/oauth2/token');assert.equal(calls[1].url,'https://apis.quran.foundation/content/api/v4/chapters');
   await invoke(server,`/api/quran?environment=production&path=${encodeURIComponent('/api/v4/chapters')}`);assert.equal(calls.filter(c=>c.url.includes('/oauth2/token')).length,1);
 });
+import {publisherAudioMetadata} from '../server/proxy.mjs';
+import audioManifest from '../src/content/fixtures/quran-audio-manifest.json';
+
+// Mirrors api.alquran.cloud/v1/surah/:n/ar.alafasy using the real CDN URLs recorded in the bundled manifest.
+function alquranCloudSurah(surah:number){
+  const clips=audioManifest.clips.filter(clip=>clip.key.startsWith(`${surah}:`)).sort((a,b)=>Number(a.key.split(':')[1])-Number(b.key.split(':')[1]));
+  return {code:200,status:'OK',data:{number:surah,numberOfAyahs:clips.length,edition:{identifier:'ar.alafasy',format:'audio',type:'versebyverse',englishName:'Alafasy'},
+    ayahs:clips.map(clip=>({number:Number(/\/(\d+)\.mp3$/.exec(clip.url)![1]),numberInSurah:Number(clip.key.split(':')[1]),audio:clip.url,text:'publisher text is not forwarded'}))}};
+}
+test('audio metadata route verifies the real publisher numbering for every bundled surah',async()=>{
+  for(const surah of [1,107,112,113,114]){
+    const urls:string[]=[];
+    const handler=createContentHandler({env:{},fetcher:async input=>{urls.push(String(input));return Response.json(alquranCloudSurah(surah));}});
+    const response=await handler(new Request(`https://site.example/content/api/audio/alafasy/${surah}`));
+    assert.equal(response.status,200);
+    assert.deepEqual(urls,[`https://api.alquran.cloud/v1/surah/${surah}/ar.alafasy`]);
+    const body=await response.json();
+    assert.equal(body.source.edition,'ar.alafasy');assert.equal(body.surah,surah);
+    assert.deepEqual(body.ayahs.map((a:{url:string})=>a.url),audioManifest.clips.filter(c=>c.key.startsWith(`${surah}:`)).sort((a,b)=>Number(a.key.split(':')[1])-Number(b.key.split(':')[1])).map(c=>c.url));
+    assert.equal(JSON.stringify(body).includes('publisher text'),false);
+    assert.match(response.headers.get('cache-control')??'',/public/);
+  }
+});
+test('audio metadata route rejects changed, incomplete, off-host or unknown publisher lists',async()=>{
+  const good=alquranCloudSurah(112);
+  const cases:unknown[]=[
+    {...good,data:{...good.data,ayahs:good.data.ayahs.slice(1)}},
+    {...good,data:{...good.data,edition:{...good.data.edition,identifier:'ar.other'}}},
+    {...good,data:{...good.data,ayahs:good.data.ayahs.map((a,i)=>i===0?{...a,audio:'https://evil.example/1.mp3'}:a)}},
+    {...good,data:{...good.data,ayahs:good.data.ayahs.map((a,i)=>i===0?{...a,number:a.number+1}:a)}},
+    {...good,data:{...good.data,number:113}},
+  ];
+  for(const payload of cases)assert.throws(()=>publisherAudioMetadata(payload,112),/unexpected list/);
+  const handler=createContentHandler({env:{},fetcher:async()=>new Response('<html>busy</html>',{status:200})});
+  assert.equal((await handler(new Request('https://site.example/content/api/audio/alafasy/112'))).status,502);
+  assert.equal((await handler(new Request('https://site.example/content/api/audio/alafasy/115'))).status,404);
+  assert.equal((await handler(new Request('https://site.example/content/api/audio/alafasy/0'))).status,404);
+  const down=createContentHandler({env:{},fetcher:async()=>new Response('x',{status:503})});
+  assert.equal((await down(new Request('https://site.example/content/api/audio/alafasy/1'))).status,502);
+  const health=await(await down(new Request('https://site.example/content/health'))).json();assert.deepEqual(health.publisherAudio,['ar.alafasy']);
+});

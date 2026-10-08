@@ -11,6 +11,7 @@ import { bundledPublishedMeaning } from '../../content/fixtures/QuranMeaning';
 import { readTanzilText } from './QuranLicensedText';
 import { isEnglishTafsir, tafsirVerseRange } from './QuranTafsir';
 import { QuranProviderError } from './QuranProvider';
+import { PUBLISHER_AUDIO_RECITER, PUBLISHER_AUDIO_SOURCE, publisherAudioDownloadId, readPublisherAudio } from './QuranPublisherAudio';
 
 const seedOperations = new WeakMap<Database, Promise<void>>();
 
@@ -100,6 +101,12 @@ export class QuranRepository {
       const existing = new Set(ayahs.map(ayah => ayah.key));
       for (const verse of downloadedArabic.staged.verses) if (verse.surahNumber === surahNumber && !existing.has(verse.key)) ayahs.push(this.layers({ key: verse.key, surahNumber, ayahNumber: verse.ayahNumber, canonicalText: verse.text, source: { ...downloadedArabic.staged.source, reference: verse.key } }, undefined, resources, preferences, transliterations));
       ayahs.sort((a,b) => a.ayahNumber - b.ayahNumber);
+    }
+    // Publisher-permitted recitation fills ayahs without bundled or parent-selected Quran Foundation audio.
+    const publisherAudio = await readPublisherAudio(db, surahNumber);
+    if (publisherAudio) for (const ayah of ayahs) {
+      const row = publisherAudio.ayahs.find(item => item.key === ayah.key);
+      if (row && !ayah.audio) ayah.audio = { url: row.url, reciter: PUBLISHER_AUDIO_RECITER, source: { ...PUBLISHER_AUDIO_SOURCE, reference: ayah.key }, downloadId: publisherAudioDownloadId(row.key, row.url) };
     }
     for(const ayah of ayahs)if(ayah.audio?.downloadId){ayah.audio.localUri=await verifiedLocalQuranAudio(db,ayah.audio.downloadId);}
     return ayahs;

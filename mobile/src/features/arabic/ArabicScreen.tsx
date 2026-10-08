@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { QuizEngine } from '../../components/Quiz/QuizEngine';
 import { NarrationButton } from '../../services/audio/NarrationButton';
-import { arabicAlphabet, arabicModules, harakat, letterQuiz, practiceQuestions, simpleWords, starterLessons, type ArabicLetter } from './content';
+import { arabicAlphabet, arabicModules, arabicNumbers, harakat, letterQuiz, numberQuestions, practiceQuestions, simpleWords, starterLessons, type ArabicLetter } from './content';
 import { TracingCanvas } from './TracingCanvas';
 import { useAppStore } from '../../state/appStore';
 import { agePracticeGuidance } from '../../content/lessons/ageGuidance';
@@ -135,6 +135,12 @@ export function ArabicScreen({ onComplete, fontSize, onOpenQuran, narrationEnabl
         <Text style={styles.heading}>{word.name} · {word.meaning}</Text><Text style={styles.text}>{word.letters}</Text>
         <NarrationButton enabled={narrationEnabled} text={word.arabic} language="ar" /><Text style={styles.caption}>Device narration is a practice aid. Read with a teacher for pronunciation guidance.</Text>
       </View>)}<QuizEngine audioEnabled={narrationEnabled} title="Words and letters" questions={practiceQuestions.slice(0, 3)} onComplete={score => onComplete('arabic-words', score)} /></>
+        : module === 'numbers' ? <>{arabicNumbers.map(number => <View key={number.value} style={styles.card}>
+          <Text style={[styles.letter, { fontSize: Math.max(fontSize * 1.7, 56) }]}>{number.digit}  {number.word}</Text>
+          <Text style={styles.heading}>{number.value} · {number.name}</Text>
+          <NarrationButton enabled={narrationEnabled} text={number.word} language="ar" /></View>)}
+          <Text style={styles.caption}>Arabic digits are written left to right, like 10 → ١٠. Device narration is a practice aid.</Text>
+          <QuizEngine audioEnabled={narrationEnabled} title="Number practice" questions={numberQuestions} onComplete={score => onComplete('arabic-numbers', score)} /></>
         : module === 'quran-words' ? <View style={styles.card}><Text style={styles.heading}>Learn words in their ayah</Text>
           <Text style={styles.text}>Open a seeded surah in the Quran reader and choose Word by word. It keeps the Quran text and source attribution together.</Text>
           {onOpenQuran ? <Button label="Open Quran" onPress={onOpenQuran} /> : <Text style={styles.caption}>Return home and tap Quran to open the reader.</Text>}</View>
