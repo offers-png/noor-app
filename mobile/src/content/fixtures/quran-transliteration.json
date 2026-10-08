@@ -1,0 +1,195 @@
+{
+  "editionId": "en.transliteration",
+  "source": {
+    "name": "Tanzil Project — English Transliteration",
+    "reference": "en.transliteration; publisher edition updated 2010-09-06",
+    "url": "https://tanzil.net/trans/en.transliteration",
+    "license": "Tanzil translations terms: noncommercial use only; translator or publisher permission required for other uses.",
+    "version": "en.transliteration — 2010-09-06",
+    "verifiedAt": "2026-10-08",
+    "translator": "English Transliteration"
+  },
+  "licenseUrl": "https://tanzil.net/trans/",
+  "sha256Source": "8C20D95E484534E921CD2E0D2546AAB7F5300090C0BD76697095B3CA1DB1E01D",
+  "sha256SelectedRows": "B8EB06292C2BDDB616B7CC626F74545EF000FE7F05B71856DF8859C219FAE6A1",
+  "sha256PublisherTermsPage": "9F45CD090FA164AB37A64C5ED1CD5076E46FA6BA0E11C877CF347B63850C24A5",
+  "sha256LicenseEvidence": "A852ECD291CADA32526E221A44ACB9086BBD9244925057EACD9E38DB7E332AB1",
+  "notice": "# --------------------------------------------------------------------\n#\n#  Quran Translation\n#  Name: Transliteration\n#  Translator: English Transliteration\n#  Language: English\n#  ID: en.transliteration\n#  Last Update: September 6, 2010\n#  Source: Tanzil.net\n#\n# --------------------------------------------------------------------\n",
+  "format": "Verbatim publisher text with original inline HTML formatting. Render tags as formatting only; do not change wording.",
+  "verses": [
+    {
+      "key": "1:1",
+      "surahNumber": 1,
+      "ayahNumber": 1,
+      "text": "Bismi All<u>a</U>hi a<b>l</B>rra<u>h</U>m<u>a</U>ni a<b>l</B>rra<u>h</U>eem<b>i</b>"
+    },
+    {
+      "key": "1:2",
+      "surahNumber": 1,
+      "ayahNumber": 2,
+      "text": "Al<u>h</U>amdu lill<u>a</U>hi rabbi alAA<u>a</U>lameen<b>a</b>"
+    },
+    {
+      "key": "1:3",
+      "surahNumber": 1,
+      "ayahNumber": 3,
+      "text": "A<b>l</B>rra<u>h</U>m<u>a</U>ni a<b>l</B>rra<u>h</U>eem<b>i</b>"
+    },
+    {
+      "key": "1:4",
+      "surahNumber": 1,
+      "ayahNumber": 4,
+      "text": "M<u>a</U>liki yawmi a<b>l</B>ddeen<b>i</b>"
+    },
+    {
+      "key": "1:5",
+      "surahNumber": 1,
+      "ayahNumber": 5,
+      "text": "Iyy<u>a</U>ka naAAbudu waiyy<u>a</U>ka nastaAAeen<b>u</b>"
+    },
+    {
+      "key": "1:6",
+      "surahNumber": 1,
+      "ayahNumber": 6,
+      "text": "Ihdin<u>a</U> a<b>l</B><u>ss</U>ir<u>at</U>a almustaqeem<b>a</b>"
+    },
+    {
+      "key": "1:7",
+      "surahNumber": 1,
+      "ayahNumber": 7,
+      "text": "<u>S</U>ir<u>at</U>a alla<u>th</U>eena anAAamta AAalayhim ghayri almagh<u>d</U>oobi AAalayhim wal<u>a</U> a<b>l</B><u>dda</U>lleen<b>a</b>"
+    },
+    {
+      "key": "107:1",
+      "surahNumber": 107,
+      "ayahNumber": 1,
+      "text": "Araayta alla<u>th</u>ee yuka<u>thth</u>ibu bi<b>al</b>ddeen<b>i</b>"
+    },
+    {
+      "key": "107:2",
+      "surahNumber": 107,
+      "ayahNumber": 2,
+      "text": "Fa<u>tha</u>lika alla<u>th</u>ee yaduAAAAu alyateem<b>a</b>"
+    },
+    {
+      "key": "107:3",
+      "surahNumber": 107,
+      "ayahNumber": 3,
+      "text": "Wal<u>a</u> ya<u>h</u>u<u>dd</u>u AAal<u>a</u> <u>t</u>aAA<u>a</u>mi almiskeen<b>i</b>"
+    },
+    {
+      "key": "107:4",
+      "surahNumber": 107,
+      "ayahNumber": 4,
+      "text": "Fawaylun lilmu<u>s</u>alleen<b>a</b>"
+    },
+    {
+      "key": "107:5",
+      "surahNumber": 107,
+      "ayahNumber": 5,
+      "text": "Alla<u>th</u>eena hum AAan <u>s</u>al<u>a</u>tihim s<u>a</u>hoon<b>a</b>"
+    },
+    {
+      "key": "107:6",
+      "surahNumber": 107,
+      "ayahNumber": 6,
+      "text": "Alla<u>th</u>eena hum yur<u>a</u>oon<b>a</b>"
+    },
+    {
+      "key": "107:7",
+      "surahNumber": 107,
+      "ayahNumber": 7,
+      "text": "WayamnaAAoona alm<u>a</u>AAoon<b>a</b>"
+    },
+    {
+      "key": "112:1",
+      "surahNumber": 112,
+      "ayahNumber": 1,
+      "text": "Qul huwa All<u>a</u>hu a<u>h</u>ad<b>un</b>"
+    },
+    {
+      "key": "112:2",
+      "surahNumber": 112,
+      "ayahNumber": 2,
+      "text": "All<u>a</u>hu a<b>l</b><u>ss</u>amad<b>u</b>"
+    },
+    {
+      "key": "112:3",
+      "surahNumber": 112,
+      "ayahNumber": 3,
+      "text": "Lam yalid walam yoolad<b>u</b>"
+    },
+    {
+      "key": "112:4",
+      "surahNumber": 112,
+      "ayahNumber": 4,
+      "text": "Walam yakun lahu kufuwan a<u>h</u>ad<b>un</b>"
+    },
+    {
+      "key": "113:1",
+      "surahNumber": 113,
+      "ayahNumber": 1,
+      "text": "Qul aAAoo<u>th</u>u birabbi alfalaq<b>i</b>"
+    },
+    {
+      "key": "113:2",
+      "surahNumber": 113,
+      "ayahNumber": 2,
+      "text": "Min sharri m<u>a</u> khalaq<b>a</b>"
+    },
+    {
+      "key": "113:3",
+      "surahNumber": 113,
+      "ayahNumber": 3,
+      "text": "Wamin sharri gh<u>a</u>siqin i<u>tha</u> waqab<b>a</b>"
+    },
+    {
+      "key": "113:4",
+      "surahNumber": 113,
+      "ayahNumber": 4,
+      "text": "Wamin sharri a<b>l</b>nnaff<u>a</u>th<u>a</u>ti fee alAAuqad<b>i</b>"
+    },
+    {
+      "key": "113:5",
+      "surahNumber": 113,
+      "ayahNumber": 5,
+      "text": "Wamin sharri <u>ha</u>sidin i<u>tha</u> <u>h</u>asad<b>a</b>"
+    },
+    {
+      "key": "114:1",
+      "surahNumber": 114,
+      "ayahNumber": 1,
+      "text": "Qul aAAoo<u>th</U>u birabbi a<b>l</B>nn<u>a</U>s<b>i</b>"
+    },
+    {
+      "key": "114:2",
+      "surahNumber": 114,
+      "ayahNumber": 2,
+      "text": "Maliki a<b>l</B>nn<u>a</U>s<b>i</b>"
+    },
+    {
+      "key": "114:3",
+      "surahNumber": 114,
+      "ayahNumber": 3,
+      "text": "Il<u>a</U>hi a<b>l</B>nn<u>a</U>s<b>i</b>"
+    },
+    {
+      "key": "114:4",
+      "surahNumber": 114,
+      "ayahNumber": 4,
+      "text": "Min sharri alwasw<u>a</U>si alkhann<u>a</U>s<b>i</b>"
+    },
+    {
+      "key": "114:5",
+      "surahNumber": 114,
+      "ayahNumber": 5,
+      "text": "Alla<u>th</U>ee yuwaswisu fee <u>s</U>udoori a<b>l</B>nn<u>a</U>s<b>i</b>"
+    },
+    {
+      "key": "114:6",
+      "surahNumber": 114,
+      "ayahNumber": 6,
+      "text": "Mina aljinnati wa<b> al</B>nn<u>a</U>s<b>m</b>"
+    }
+  ]
+}

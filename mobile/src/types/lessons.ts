@@ -70,3 +70,24 @@ export interface DuaRecord {
   readonly audioUri: string | null;
   readonly review: ContentReview;
 }
+
+/** Published source selections are distinct from our editable education lessons. */
+export interface SourceReadingRecord {
+  readonly id: string;
+  readonly category: 'hadith' | 'duas';
+  readonly title: string;
+  readonly topic: string;
+  readonly canonicalText: string;
+  readonly translation: string;
+  readonly source: LessonSource;
+  readonly textScope: 'excerpt' | 'supplication';
+  readonly narrator: string | null;
+  readonly audioUri: string | null;
+  readonly transliteration: { readonly text: string; readonly source: LessonSource } | null;
+  readonly publication: {
+    readonly kind: 'permitted-teaching-selection';
+    readonly sourceCheckedAt: string;
+    readonly permissionCheckedAt: string;
+    readonly permissionUrl: string;
+  };
+}
