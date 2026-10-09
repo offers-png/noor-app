@@ -6,7 +6,7 @@ import { reviewContentHash } from './reviewContent';
 const parentReviewableIds = new Set(['hadith-1', 'hadith-6018', 'hadith-13', 'islam-five-pillars', 'islam-wudu', 'islam-salah',
   'islam-story-nuh', 'islam-story-yunus', 'dua-before-eating', 'dua-forgiveness', 'dua-knowledge', 'dua-masjid-entry', 'dua-masjid-exit',
   'islam-prayer-times', 'islam-prayer-ready', 'islam-six-beliefs', 'islam-salam', 'islam-parents',
-  'dua-quran-good-both-worlds', 'dua-quran-parents', 'dua-quran-knowledge', 'dua-quran-family']);
+  'dua-quran-good-both-worlds', 'dua-quran-parents', 'dua-quran-knowledge', 'dua-quran-family', 'guide-salah', 'guide-wudu']);
 export function canParentPublishLesson(lesson: EducationLesson): boolean {
   return !lesson.review.developmentOnly || parentReviewableIds.has(lesson.id);
 }

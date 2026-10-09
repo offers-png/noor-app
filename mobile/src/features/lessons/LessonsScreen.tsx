@@ -16,6 +16,7 @@ import { useAppStore } from '../../state/appStore';
 import type { EducationLesson } from '../../types/lessons';
 import { LessonIllustration } from './LessonIllustration';
 import { SourceReadingLibrary } from './SourceReadingLibrary';
+import { ImportedSection } from './ImportedSection';
 import { hasAvailableEditorialLessons } from './sourceReadingRepository';
 import { agePracticeGuidance } from '../../content/lessons/ageGuidance';
 import { sourceTextRuns } from '../../services/quran/presentation';
@@ -57,7 +58,7 @@ function LessonEntry(props: LessonsScreenProps & { networkAllowed: boolean }) {
     return () => { mounted = false; };
   }, [props.category, props.developmentContent, props.childAge]));
   if (props.category === 'islam') return <LessonContent {...props} />;
-  if (!education) return <SourceReadingLibrary category={props.category} childId={props.childId} fontSize={props.fontSize} networkAllowed={props.networkAllowed} audioEnabled={props.narrationEnabled ?? false} onComplete={props.onComplete} onLessons={hasEducation ? () => setEducation(true) : undefined} />;
+  if (!education) return <View style={styles.stack}><SourceReadingLibrary category={props.category} childId={props.childId} fontSize={props.fontSize} networkAllowed={props.networkAllowed} audioEnabled={props.narrationEnabled ?? false} onComplete={props.onComplete} onLessons={hasEducation ? () => setEducation(true) : undefined} /><ImportedSection kind={props.category === 'duas' ? 'dua' : 'hadith'} childId={props.childId} fontSize={props.fontSize} onComplete={props.onComplete} /></View>;
   return <View style={styles.stack}><Button label="← Sourced readings" secondary onPress={() => setEducation(false)} /><LessonContent {...props} /></View>;
 }
 
