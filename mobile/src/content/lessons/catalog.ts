@@ -3,6 +3,7 @@ import type { QuizQuestion } from '../../types/quiz';
 import { hadithFixtures } from '../fixtures/hadith';
 import { duaFixtures } from './duas';
 import { quranReference, reviewDraft, sunnahSource } from './sources';
+import { salahReviewSections, wuduReviewSections } from '../salah/salahGuide';
 
 const question = (id: string, prompt: string, correct: string, alternatives: string[], sourceReference: string): QuizQuestion => ({
   id, type: 'multiple-choice', prompt,
@@ -144,7 +145,22 @@ export const duaLessons: EducationLesson[] = duaFixtures.map(dua => ({ id: dua.i
     ...(dua.verseKey ? [{ title: 'Find it in the Qur’an', body: `This supplication is in the Qur’an at ${dua.verseKey}. Read the whole ayah and a published translation together in the Qur’an reader.`, kind: 'activity' as const, sourceReference: `Qur'an ${dua.verseKey}` }] : [])],
   discussion: 'Choose one short phrase to practice together today.', quiz: [] }));
 
-export const allLessons: EducationLesson[] = [...hadithLessons, ...islamLessons, ...duaLessons]
+/** Full Salah and Wudu guides behind the Salah and Wudu tiles. Shown to children only after review and publication. */
+export const guideLessons: EducationLesson[] = [
+  { id: 'guide-salah', category: 'islam', title: 'Salah — Learn to Pray', subtitle: 'Rak‘ah-by-rak‘ah guide for the five daily prayers', topic: 'Salah', source: postureSource, review: reviewDraft(), stepByStep: true,
+    sections: salahReviewSections(), discussion: 'Which part of the prayer would you like to practise with your teacher next?', quiz: [
+      question('guide-salah-fajr', 'How many rak‘ahs does Fajr have?', '2', ['3', '4'], 'Sahih al-Bukhari 757'),
+      question('guide-salah-maghrib', 'How many rak‘ahs does Maghrib have?', '3', ['2', '4'], 'Sahih al-Bukhari 757'),
+      question('guide-salah-fatihah', 'Which surah is recited in every rak‘ah?', 'Al-Fatihah', ['Al-Baqarah', 'Yasin'], 'Sahih al-Bukhari 756'),
+      question('guide-salah-end', 'How does the prayer end?', 'With the taslim', ['With ruku', 'With the opening takbir'], 'Sunan Abi Dawud 996')] },
+  { id: 'guide-wudu', category: 'islam', title: 'Wudu — Learn Purification', subtitle: 'Ten steps, what breaks wudu, and saving water', topic: 'Wudu', source: wuduSource, review: reviewDraft(), stepByStep: true,
+    sections: wuduReviewSections(), discussion: 'Which step of wudu do you need to be most careful with?', quiz: [
+      { id: 'guide-wudu-order', type: 'order', prompt: 'Put these wudu steps in order.', items: [{ id: 'face', label: 'Wash face' }, { id: 'arms', label: 'Wash arms' }, { id: 'head', label: 'Wipe head' }, { id: 'feet', label: 'Wash feet' }], correctOrder: ['face', 'arms', 'head', 'feet'], explanation: 'Face, arms, head, then feet.', sourceReference: "Qur'an 5:6" },
+      question('guide-wudu-elbows', 'How far are the arms washed?', 'Through the elbows', ['Only the hands', 'Up to the shoulders'], "Qur'an 5:6"),
+      question('guide-wudu-water', 'How should we use water in wudu?', 'Use a small amount and not waste it', ['Leave the tap running', 'Use as much as possible'], 'Sahih al-Bukhari 201')] },
+];
+
+export const allLessons: EducationLesson[] = [...hadithLessons, ...islamLessons, ...duaLessons, ...guideLessons]
   .map(lesson => ({ ...lesson, ageRange: { min: 5, max: 15 } }));
 export const lessonSourceRegistry = [...new Map([
   ...allLessons.map(lesson => lesson.source), prayerTimesSource, qiblahSource, postureSource,

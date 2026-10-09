@@ -2,7 +2,7 @@
   "expo": {
     "name": "Kids Islam",
     "slug": "kids-islam",
-    "version": "1.0.3",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,10 +18,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.noor.kidsislam",
-      "versionCode": 4,
+      "versionCode": 5,
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -45,6 +43,15 @@
           "enableBackgroundRecording": false,
           "recordAudioAndroid": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Kids Islam uses the camera only when a child taps Record My Recitation, so a parent can review it. Videos stay on this device.",
+          "microphonePermission": "Kids Islam records sound with a recitation video so a parent can listen. Recordings stay on this device.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
         }
       ]
     ]

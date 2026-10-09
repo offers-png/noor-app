@@ -70,7 +70,7 @@ test('Sunnah errors reject wrong references, missing Arabic, insecure production
 
 test('review approval requires an exact reviewer attestation and separate explicit family publication', () => {
   assert.equal(visibleLessons(allLessons, false).length, 0);
-  assert.equal(visibleLessons(allLessons, true).length, 22);
+  assert.equal(visibleLessons(allLessons, true).length, 24);
   const review = { ...allLessons[0].review, status: 'published' as const, reviewer: 'Reviewer named by parent', approvedAt: '2026-10-07', approvedVersion: '1', reviewedContentHash: reviewContentHash(allLessons[0]),
     attestation: { kind: 'parent-entered' as const, qualificationConfirmed: true as const, recordedAt: '2026-10-07' },
     publication: { kind: 'parent-local' as const, version: '1', publishedAt: '2026-10-08', parentSuitabilityConfirmed: true as const, sourcePermissionConfirmed: true as const } };
@@ -134,7 +134,7 @@ test('offline review lesson seeding is idempotent and keeps sourced Arabic separ
   const { db, close } = localDb();
   try {
     await db.execAsync(schema); await seedReviewLessons(db); await seedReviewLessons(db);
-    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM lessons'))?.count, 22);
+    assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM lessons'))?.count, 24);
     assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM duas'))?.count, 9);
     assert.equal((await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM hadith_lessons'))?.count, 3);
     const source = await db.getFirstAsync<{ canonical_text: string }>('SELECT canonical_text FROM hadiths WHERE id = ?', hadithFixtures[0].id);

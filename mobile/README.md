@@ -74,7 +74,7 @@ server/                          server-side content proxy
 
 ## Credentials and network consent
 
-Copy `.env.example` to a local `.env` only if configuring a proxy. `EXPO_PUBLIC_CONTENT_PROXY_URL` is a public URL, not a credential. Parent network consent defaults to off. No child analytics, ads, public profiles, social chat, location, microphone, or camera feature is included in the mobile app.
+Copy `.env.example` to a local `.env` only if configuring a proxy. `EXPO_PUBLIC_CONTENT_PROXY_URL` is a public URL, not a credential. Parent network consent defaults to off. No child analytics, ads, public profiles, social chat or location features are included. The camera and microphone are used only when a child taps Record My Recitation; videos stay in the app's private storage for parent review. See [family points, recordings, Salah and Wudu](docs/FAMILY-REWARDS.md).
 
 Quran Foundation production access requires `QF_CLIENT_ID` and `QF_CLIENT_SECRET` on the server. Sunnah access requires `SUNNAH_API_KEY` on the server. See `server/README.md` and its environment example. Never prefix a secret with `EXPO_PUBLIC_`, put it in `app.json`, or commit `.env`. API keys are never accepted in child UI.
 
