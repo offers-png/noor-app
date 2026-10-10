@@ -6,6 +6,8 @@ const MAX_RESULTS = 10;
 const MAX_BODY_BYTES = 8192;
 const MAX_DURATION_SECONDS = 20 * 60;
 const TOPIC_QUERIES = Object.freeze({
+  creation: 'How Allah created the world Islamic story for children',
+  adam: 'Prophet Adam creation story animated Islamic story for children',
   nuh: 'Prophet Nuh Noah animated Islamic story for children',
   ibrahim: 'Prophet Ibrahim Abraham animated Islamic story for children',
   musa: 'Prophet Musa Moses animated Islamic story for children',

@@ -50,3 +50,26 @@
 Automated: separate child records; point values; approval-only crediting; duplicates; daily caps; the $1 limit; midnight reset in a chosen time zone; late approvals; retry, reject and corrections; paid history kept; payouts; PIN guards; recording save, duplicate discard, retry replacement, retention, deletion and low storage; the prayer rak‘ah and tashahhud structure; verified Qur'an keys; wudu order; guide review gating; Android permission configuration; and Sunnah.com through the proxy with the key kept server-side.
 
 Not verified here: camera capture, playback and permission prompts on a real phone (no Android device in this environment), live Sunnah.com, and religious accuracy review of the guides. These need on-device testing, a Sunnah.com key and your qualified reviewer.
+
+## Keeping the phone in Kids Islam — 1.2.0 (6)
+
+Parent Mode → **Lock the phone to Kids Islam**. When it is on, the app locks the screen whenever it opens or Kids Mode starts. Your child can use every lesson but cannot go to other apps. **Let the phone leave the app** (behind your PIN) pauses the lock until you tap Enter Kids Mode again.
+
+Two levels, both using Android's lock task mode:
+
+1. **App pinning (any Android phone).** Turn on Settings → App pinning, and its "Ask for PIN before unpinning". The first time, Android asks to pin; tap Pin or Got it. Leaving then needs the button gesture *and* the phone's lock-screen PIN, so use a phone PIN your child does not know. If your child declines the pin prompt, Home shows "Keep Kids Islam on screen".
+2. **Dedicated device mode (complete lock).** Only your Kids Islam parent PIN can release it; Home, Recents and notifications are hidden. This needs a one-time setup with a computer:
+   1. Install the Kids Islam APK.
+   2. Remove every account from the phone (Settings → Accounts), or use a freshly reset phone without signing in. Android allows this only on phones without accounts.
+   3. Turn on Developer options and USB debugging. Connect the phone to a computer with Android platform-tools.
+   4. Run `adb shell dpm set-device-owner com.noor.kidsislam/expo.modules.kidslock.KidsLockAdminReceiver`
+   5. Open Parent Mode and turn on the lock.
+   To undo: Parent Mode → Turn off dedicated device mode. Until then Android will not let you uninstall the app.
+
+While locked, the power button still works. Incoming calls and notifications may be hidden. Exporting a video or opening phone Settings needs you to release the lock first.
+
+## Story videos (YouTube)
+
+- Parent Mode → **Story videos (YouTube)**: pick a topic, such as How Allah created the world, Prophet Adam, Nuh, Ibrahim, Musa, Yunus, Yusuf or Kindness. Enter a YouTube channel you trust (@handle or channel link) and search. The content server returns only public, embeddable, Made for Kids, non-live videos of up to 20 minutes, using the website's existing checks. Watch a video, confirm, and approve it.
+- The child's **Story Videos** tile lists approved videos by topic. Before each play the video is checked again with YouTube. It plays inside the app on YouTube's privacy-enhanced player. Tapping through to YouTube is blocked, so the lock is not broken.
+- Needs internet and **`YOUTUBE_API_KEY`** on the content server (Netlify Functions variable, then redeploy). `YOUTUBE_ALLOWED_CHANNEL_IDS` optionally restricts channels. YouTube may still show ads. The checks cannot judge religious accuracy or whether prophets are pictured; that is the parent's review.
