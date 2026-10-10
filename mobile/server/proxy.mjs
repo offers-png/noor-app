@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { createStoryVideosHandler } from '../../server/storyVideos.mjs';
 
 const groups = 'articles|chapter_recitations|mushafs|quran_core|recitations|tafsirs|translations|word_by_word_translations|word_by_word_transliterations';
 export function allowedQuranPath(path) {
@@ -71,6 +72,7 @@ export function createContentHandler({env=process.env,fetcher=fetch,now=Date.now
   let tokenExpiry = 0;
   let pendingToken = null;
   const rates = new Map();
+  const videoHandler = createStoryVideosHandler({env:{YOUTUBE_API_KEY:env.YOUTUBE_API_KEY,YOUTUBE_ALLOWED_CHANNEL_IDS:env.YOUTUBE_ALLOWED_CHANNEL_IDS},fetcher,now});
   async function token() {
     if (!env.QF_CLIENT_ID || !env.QF_CLIENT_SECRET) throw Object.assign(new Error('Quran Foundation credentials are not configured on the server.'),{status:503});
     if (accessToken && now() < tokenExpiry-60000) return accessToken;
@@ -104,7 +106,19 @@ export function createContentHandler({env=process.env,fetcher=fetch,now=Date.now
       const request = new URL(req.url);
       // Custom hosting path is a fixed prefix, not an arbitrary upstream target.
       const pathname=request.pathname.startsWith('/content/')?request.pathname.slice('/content'.length):request.pathname;
-      if (pathname === '/health') return json(200,{status:'ok',environment,quranConfigured:Boolean(env.QF_CLIENT_ID&&env.QF_CLIENT_SECRET),hadithConfigured:Boolean(env.SUNNAH_API_KEY),publisherDownloads:['tanzil-arabic','tanzil-transliteration'],publisherAudio:[PUBLISHER_AUDIO.edition]});
+      if (pathname === '/health') return json(200,{status:'ok',environment,quranConfigured:Boolean(env.QF_CLIENT_ID&&env.QF_CLIENT_SECRET),hadithConfigured:Boolean(env.SUNNAH_API_KEY),videosConfigured:Boolean(env.YOUTUBE_API_KEY),publisherDownloads:['tanzil-arabic','tanzil-transliteration'],publisherAudio:[PUBLISHER_AUDIO.edition]});
+      if (pathname === '/api/videos') {
+        // Same checks as the website's story videos (public, embeddable, Made for Kids, <= 20 min,
+        // optional channel allow-list). The YouTube key stays on the server.
+        const action=request.searchParams.get('action');
+        const body=action==='search'?{action,topic:request.searchParams.get('topic'),channelId:request.searchParams.get('channel')}
+          :action==='validate'?{action,ids:(request.searchParams.get('ids')??'').split(',').filter(Boolean)}:null;
+        if(!body)return json(400,{message:'Unsupported video request.'});
+        const internal=new Request(new URL('/videos',request.origin),{method:'POST',headers:{Origin:request.origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const response=await videoHandler(internal);
+        const result=await response.json();
+        return json(response.status,response.ok?result:{message:result.error??'Videos could not be checked.'});
+      }
       const audio=/^\/api\/audio\/alafasy\/([1-9]\d{0,2})$/.exec(pathname);
       if(audio){
         const surah=Number(audio[1]);
