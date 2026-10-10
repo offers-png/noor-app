@@ -8,7 +8,7 @@ import type { Recitation } from '../../content/salah/salahGuide';
 
 /** Shown instead of the guide until a parent publishes it. */
 export function GuideHidden({ name, onParent }: { name: string; onParent: () => void }) {
-  return <Card><Text style={styles.heading}>Learn this with your parent</Text><Text style={styles.body}>{`Your parent checks the ${name} guide with your teacher before it opens here. Ask them to open Parent Mode → Review educational explanations.`}</Text><Button label="Parent mode" secondary onPress={onParent} /></Card>;
+  return <Card><Text style={styles.heading}>Learn this with your parent</Text><Text style={styles.body}>{`Your parent opens the ${name} guide after checking it. Ask your parent to tap the button below.`}</Text><Button label={`Parent: open the ${name} guide`} onPress={onParent} /></Card>;
 }
 export function PreviewBanner() {
   return <Card><Text style={styles.review}>Preview · turned on by your parent</Text><Text style={styles.body}>This guide is still waiting for your parent’s review. Learn it together with your adult.</Text></Card>;

@@ -109,3 +109,37 @@ test('Android permissions: camera and microphone are requested only for recordin
   assert.match(camera[1].cameraPermission, /stay on this device/);
   assert.equal(config.android.allowBackup, false, 'recordings are not copied into cloud backups');
 });
+
+test('a parent can open a guide in one step from the locked tile, and only with PIN, a name and confirmation', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { schema } = await import('../src/database/migrations/001');
+  const { LessonReviewRepository } = await import('../src/content/lessons/reviewRepository');
+  const { loadStoredLessons } = await import('../src/content/lessons/storage');
+  const { isPublishedForFamily, lessonFitsAge } = await import('../src/content/lessons/approval');
+  const sqlite = new DatabaseSync(':memory:');
+  const db = {
+    execAsync: async (sql: string) => { sqlite.exec(sql); },
+    runAsync: async (sql: string, ...params: unknown[]) => { const r = sqlite.prepare(sql).run(...(params as never[])); return { changes: Number(r.changes), lastInsertRowId: Number(r.lastInsertRowid) }; },
+    getFirstAsync: async (sql: string, ...params: unknown[]) => sqlite.prepare(sql).get(...(params as never[])) ?? null,
+    getAllAsync: async (sql: string, ...params: unknown[]) => sqlite.prepare(sql).all(...(params as never[])),
+    withTransactionAsync: async (work: (tx: unknown) => Promise<void>) => { sqlite.exec('BEGIN'); try { await work(db); sqlite.exec('COMMIT'); } catch (error) { sqlite.exec('ROLLBACK'); throw error; } },
+  };
+  try {
+    await db.execAsync(schema);
+    let unlocked = false;
+    const repo = new LessonReviewRepository(db as never, () => unlocked);
+    await assert.rejects(repo.openForFamily('guide-salah', { reviewer: 'Imam', ageRange: { min: 5, max: 15 }, confirmed: true }), /PIN/);
+    unlocked = true;
+    await assert.rejects(repo.openForFamily('guide-salah', { reviewer: 'Imam', ageRange: { min: 5, max: 15 }, confirmed: false }), /Confirm/);
+    await assert.rejects(repo.openForFamily('guide-salah', { reviewer: ' ', ageRange: { min: 5, max: 15 }, confirmed: true }), /name/);
+    await assert.rejects(repo.openForFamily('guide-salah', { reviewer: 'Imam', ageRange: { min: 3, max: 15 }, confirmed: true }), /ages/);
+    const published = await repo.openForFamily('guide-salah', { reviewer: 'Imam', ageRange: { min: 7, max: 12 }, confirmed: true });
+    assert.equal(published.review.reviewer, 'Imam');
+    const stored = (await loadStoredLessons(db as never)).find(lesson => lesson.id === 'guide-salah')!;
+    assert.equal(isPublishedForFamily(stored), true);
+    assert.equal(lessonFitsAge(stored, 9), true); assert.equal(lessonFitsAge(stored, 14), false);
+    assert.equal(isPublishedForFamily((await loadStoredLessons(db as never)).find(lesson => lesson.id === 'guide-wudu')!), false);
+    // Opening again (e.g. to change ages) works from any state.
+    assert.equal(isPublishedForFamily(await repo.openForFamily('guide-salah', { reviewer: 'Imam', ageRange: { min: 5, max: 15 }, confirmed: true })), true);
+  } finally { sqlite.close(); }
+});

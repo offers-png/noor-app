@@ -24,7 +24,7 @@ export default function SalahScreen() {
   const back = view.name === 'home' ? undefined : () => { setMessage(''); setView({ name: 'home' }); };
   if (guide.status === 'loading') return <Screen title="Salah — Learn to Pray"><Body>Opening the guide…</Body></Screen>;
   if (guide.status === 'error') return <Screen title="Salah — Learn to Pray"><Body>The guide could not open. Please try again.</Body></Screen>;
-  if (guide.status === 'hidden') return <Screen title="Salah — Learn to Pray"><GuideHidden name="Salah" onParent={() => router.push('/parent')} /></Screen>;
+  if (guide.status === 'hidden') return <Screen title="Salah — Learn to Pray"><GuideHidden name="Salah" onParent={() => router.push({ pathname: '/guide-approve', params: { id: 'guide-salah' } })} /></Screen>;
 
   if (view.name === 'prepare') {
     const step = PREPARATION_STEPS[view.step];

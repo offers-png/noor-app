@@ -20,7 +20,7 @@ export default function WuduScreen() {
   const [message, setMessage] = useState('');
   if (guide.status === 'loading') return <Screen title="Wudu — Learn Purification"><Body>Opening the guide…</Body></Screen>;
   if (guide.status === 'error') return <Screen title="Wudu — Learn Purification"><Body>The guide could not open. Please try again.</Body></Screen>;
-  if (guide.status === 'hidden') return <Screen title="Wudu — Learn Purification"><GuideHidden name="Wudu" onParent={() => router.push('/parent')} /></Screen>;
+  if (guide.status === 'hidden') return <Screen title="Wudu — Learn Purification"><GuideHidden name="Wudu" onParent={() => router.push({ pathname: '/guide-approve', params: { id: 'guide-wudu' } })} /></Screen>;
   const home = () => { setStep(null); setQuiz(false); setMessage(''); };
   if (quiz) return <Screen title="Wudu quiz" back={home}>
     <QuizEngine questions={guide.lesson.quiz} audioEnabled={settings.audioEnabled} networkAllowed={settings.networkEnabled} title="Check what you learned" onComplete={async score => {

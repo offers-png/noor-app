@@ -65,4 +65,18 @@ export class LessonReviewRepository {
     const lesson = await this.current(id, expectedVersion);
     return this.persist(lesson, publishReviewedLesson(lesson, confirmation));
   }
+  /** One parent confirmation from the locked tile: saves ages, records who checked it, and publishes. Same records as the full review screen. */
+  async openForFamily(id: string, { reviewer, ageRange, confirmed }: { reviewer: string; ageRange: LessonAgeRange; confirmed: boolean }): Promise<EducationLesson> {
+    if (confirmed !== true) throw new Error('Confirm that you checked this guide and approve it for your children.');
+    if (typeof reviewer !== 'string' || !reviewer.trim()) throw new Error('Enter the name of the person who checked this guide.');
+    if (!validAgeRange(ageRange)) throw new Error('Choose ages from 5 to 15.');
+    let lesson = (await this.list()).find(item => item.id === id);
+    if (!lesson) throw new Error('This guide is unavailable.');
+    if (JSON.stringify(lesson.ageRange) !== JSON.stringify(ageRange)) {
+      lesson = await this.edit(id, lesson.review.version, { sections: lesson.sections.map(section => ({ title: section.title, body: section.body })), discussion: lesson.discussion, ageRange });
+    }
+    lesson = await this.requestReview(id, lesson.review.version);
+    lesson = await this.approve(id, lesson.review.version, reviewer, true);
+    return this.publish(id, lesson.review.version, { parentSuitabilityConfirmed: true, sourcePermissionConfirmed: true });
+  }
 }
