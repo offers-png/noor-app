@@ -1,6 +1,6 @@
 {
   "name": "kids-islam",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "main": "expo-router/entry",
   "dependencies": {
     "@noble/hashes": "^2.4.0",
