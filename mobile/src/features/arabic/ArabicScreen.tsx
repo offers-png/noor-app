@@ -50,12 +50,12 @@ function LetterLesson({ letter, fontSize, narrationEnabled = false, onComplete, 
       <Text style={[styles.letter, { fontSize: Math.max(fontSize * 2.5, 84) }]}>{letter.arabic}</Text>
       <Text style={styles.heading}>Listen to the letter name</Text>
       <NarrationButton enabled={narrationEnabled} text={letter.spokenName} language="ar" label={`▶ Hear ${letter.name}`} />
-      <Text style={styles.caption}>Your device reads a letter name. Learn exact pronunciation with a teacher.</Text>
+      <Text style={styles.caption}>Your device reads the letter name.</Text>
     </View>}
     {step === 'repeat' && <View style={styles.card}>
       <Text style={[styles.letter, { fontSize: Math.max(fontSize * 2.5, 84) }]}>{letter.arabic}</Text>
       <Text style={styles.heading}>Say it after the voice</Text>
-      <Text style={styles.text}>Listen, then say “{letter.name}” three times. Ask a teacher or parent to listen with you.</Text>
+      <Text style={styles.text}>Listen, then say “{letter.name}” three times.</Text>
       <NarrationButton enabled={narrationEnabled} text={letter.spokenName} language="ar" />
       <Text style={styles.caption}>We do not record your voice or judge pronunciation.</Text>
     </View>}
@@ -133,7 +133,7 @@ export function ArabicScreen({ onComplete, fontSize, onOpenQuran, narrationEnabl
       </> : module === 'words' || module === 'reading' ? <>{simpleWords.map(word => <View key={word.name} style={styles.card}>
         <Text style={[styles.letter, { fontSize: Math.max(fontSize * 1.7, 56) }]}>{word.arabic}</Text>
         <Text style={styles.heading}>{word.name} · {word.meaning}</Text><Text style={styles.text}>{word.letters}</Text>
-        <NarrationButton enabled={narrationEnabled} text={word.arabic} language="ar" /><Text style={styles.caption}>Device narration is a practice aid. Read with a teacher for pronunciation guidance.</Text>
+        <NarrationButton enabled={narrationEnabled} text={word.arabic} language="ar" /><Text style={styles.caption}>Device narration is a practice aid.</Text>
       </View>)}<QuizEngine audioEnabled={narrationEnabled} title="Words and letters" questions={practiceQuestions.slice(0, 3)} onComplete={score => onComplete('arabic-words', score)} /></>
         : module === 'numbers' ? <>{arabicNumbers.map(number => <View key={number.value} style={styles.card}>
           <Text style={[styles.letter, { fontSize: Math.max(fontSize * 1.7, 56) }]}>{number.digit}  {number.word}</Text>

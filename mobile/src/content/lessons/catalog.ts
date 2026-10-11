@@ -48,7 +48,7 @@ const qiblahSource = quranReference("Qur'an 2:144", '2/144');
 
 const wuduSteps: LessonSection[] = [
   { title: 'Wash hands', body: 'Wash both hands. This narration describes washing them three times.', kind: 'source_fact', illustration: 'hands' },
-  { title: 'Rinse mouth and nose', body: 'Rinse the mouth, then clean the nose gently with water. Ask an adult to show you.', kind: 'source_fact', illustration: 'mouth' },
+  { title: 'Rinse mouth and nose', body: 'Rinse the mouth, then sniff a little water gently into the nose and blow it out.', kind: 'source_fact', illustration: 'mouth' },
   { title: 'Wash face', body: 'Wash the face. The narration describes three washes.', kind: 'source_fact', illustration: 'face' },
   { title: 'Wash arms', body: 'Wash hands and forearms up to the elbows. The narration describes three washes.', kind: 'source_fact', illustration: 'arms' },
   { title: 'Wipe head', body: 'Pass wet hands over the head.', kind: 'source_fact', illustration: 'head' },
@@ -63,35 +63,35 @@ export const islamLessons: EducationLesson[] = [
       { title: 'Zakah', body: 'The required giving of charity.', kind: 'source_fact' },
       { title: 'Sawm', body: 'Fasting in Ramadan.', kind: 'source_fact' },
       { title: 'Hajj', body: 'Pilgrimage to Makkah.', kind: 'source_fact' },
-      { title: 'Learn with your family', body: 'Ask your parent or teacher how your family learns about these pillars. Details of duties need qualified teaching.', kind: 'activity' },
-    ], discussion: 'Which pillar have you learned about with your family?', quiz: [
+      { title: 'Remember the five', body: 'Islam is built on five pillars: the Shahadah, Salah, Zakah, fasting in Ramadan and Hajj.', kind: 'activity' },
+    ], discussion: 'Which of the five pillars do you already practise?', quiz: [
       question('pillars-1', 'How many pillars are in this introduction?', 'Five', ['Two', 'Ten'], pillarsSource.sourceReference),
       question('pillars-2', 'Which pillar names daily prayers?', 'Salah', ['Hajj', 'Zakah'], pillarsSource.sourceReference)] },
-  { id: 'islam-wudu', category: 'islam', title: 'Learn Wudu', subtitle: 'A visual practice guide with your adult', topic: 'Wudu', source: wuduSource, review: reviewDraft(), stepByStep: true,
-    sections: wuduSteps, discussion: 'Practice with a parent or qualified teacher. This guide follows one narration; it is not a ruling on every detail.', quiz: [
+  { id: 'islam-wudu', category: 'islam', title: 'Learn Wudu', subtitle: 'A visual practice guide', topic: 'Wudu', source: wuduSource, review: reviewDraft(), stepByStep: true,
+    sections: wuduSteps, discussion: 'This guide follows the description of wudu in one narration. Which step do you need to be most careful with?', quiz: [
       { id: 'wudu-order', type: 'order', prompt: 'Put these stages of the guide in order.', items: [{ id: 'hands', label: 'Hands' }, { id: 'head', label: 'Head' }, { id: 'feet', label: 'Feet' }], correctOrder: ['hands', 'head', 'feet'], explanation: 'In this guide, hands come before the head and feet.', sourceReference: wuduSource.sourceReference }] },
   { id: 'islam-salah', category: 'islam', title: 'Meet Salah', subtitle: 'Prayer names • Preparation • Calm movements', topic: 'Salah', source: salahSource, review: reviewDraft(), stepByStep: true,
     sections: [
       { title: 'Five daily prayers', body: 'Fajr, Dhuhr (Zuhr), Asr, Maghrib, and Isha are the five daily prayers. Each has its own time.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
-      { title: 'Prepare with your adult', body: 'Learn wudu with your parent or teacher. Ask them about clean clothing and your family’s prayer space.', kind: 'activity', illustration: 'hands' },
-      { title: 'Qiblah', body: 'Qiblah is the direction faced for prayer, toward the Sacred Mosque in Makkah. Ask an adult to help find it.', kind: 'source_fact', sourceReference: qiblahSource.sourceReference, illustration: 'mosque' },
-      { title: 'Begin and stand', body: 'Prayer begins with takbir. Recitation takes place while standing. Learn the words with a qualified teacher.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'standing' },
-      { title: 'Ruku', body: 'Ruku is bowing. Move calmly and learn the position with your teacher.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'bowing' },
+      { title: 'Prepare', body: 'Make wudu, wear clean clothes and pray in a clean place.', kind: 'activity', illustration: 'hands' },
+      { title: 'Qiblah', body: 'Qiblah is the direction faced for prayer, toward the Sacred Mosque in Makkah. A compass or a Qiblah app shows the direction.', kind: 'source_fact', sourceReference: qiblahSource.sourceReference, illustration: 'mosque' },
+      { title: 'Begin and stand', body: 'Prayer begins with the takbir, “Allahu akbar”. Then you recite Al-Fatihah while standing.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'standing' },
+      { title: 'Ruku', body: 'Ruku is bowing, with your hands on your knees and your back straight. Stay still for a moment.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'bowing' },
       { title: 'Stand again', body: 'Return to an upright standing position after bowing.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'standing' },
-      { title: 'Sujud', body: 'Sujud is prostration. Take your time and ask your teacher to demonstrate.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'prostration' },
-      { title: 'Sit calmly', body: 'There is a sitting position between prostrations. Learn calmly with your teacher.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'sitting' },
-      { title: 'Tasleem', body: 'Prayer ends with tasleem, a greeting of peace. Ask your teacher to teach the words and movements.', kind: 'source_fact', sourceReference: 'Sahih Muslim 498', illustration: 'sitting' },
-    ], discussion: 'This learning guide helps you recognize parts of prayer. Your teacher can explain the full sequence and supplications.', quiz: [
+      { title: 'Sujud', body: 'Sujud is prostration: your forehead and nose, both hands, your knees and your toes touch the ground.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'prostration' },
+      { title: 'Sit calmly', body: 'Between the two prostrations you sit up calmly before going down again.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'sitting' },
+      { title: 'Tasleem', body: 'Prayer ends with tasleem: “As-salamu alaykum wa rahmatullah”, turning your head to the right and then to the left.', kind: 'source_fact', sourceReference: 'Sahih Muslim 498', illustration: 'sitting' },
+    ], discussion: 'This guide shows the parts of prayer. The Salah tile teaches the whole prayer, rak‘ah by rak‘ah, with the words to say.', quiz: [
       question('salah-1', 'What is ruku?', 'Bowing', ['Running', 'Eating'], postureSource.sourceReference)] },
   { id: 'islam-story-nuh', category: 'islam', title: 'Prophet Nuh: the Ark', subtitle: 'A source-based story lesson', topic: 'Prophets', source: quranReference("Qur'an 11:42–44", '11/42'), review: reviewDraft(),
     sections: [{ title: 'Source-based fact • original summary', body: 'The Ark carried Nuh and those with him through powerful waves.', kind: 'source_fact', sourceReference: "Qur'an 11:42", illustration: 'boat' },
-      { title: 'Educational reflection', body: 'We can reflect on seeking Allah’s help. Read the passage with a parent or qualified teacher to learn the full story.', kind: 'explanation' },
-      { title: 'Together activity', body: 'Draw a boat and write the passage reference next to it. The drawing is your learning activity, not a picture of the Prophet.', kind: 'activity' }],
+      { title: 'Educational reflection', body: 'Like Nuh, we can turn to Allah for help when things are hard.', kind: 'explanation' },
+      { title: 'Activity', body: 'Draw a boat and write the passage reference next to it. The drawing is your learning activity, not a picture of the Prophet.', kind: 'activity' }],
     discussion: 'What can help you stay calm when something feels difficult?', quiz: [] },
   { id: 'islam-story-yunus', category: 'islam', title: 'Prophet Yunus: asking Allah', subtitle: 'A source-based story lesson', topic: 'Prophets', source: quranReference("Qur'an 21:87–88", '21/87'), review: reviewDraft(),
     sections: [{ title: 'Source-based fact • original summary', body: 'Yunus called to Allah in distress. The next verse tells of Allah answering and rescuing him.', kind: 'source_fact', sourceReference: "Qur'an 21:87–88", illustration: 'ocean' },
-      { title: 'Educational reflection', body: 'We can ask Allah for help and forgiveness. Learn the passage with an adult.', kind: 'explanation' },
-      { title: 'Together activity', body: 'Tell your parent one way you can ask for help when you make a mistake.', kind: 'activity' }],
+      { title: 'Educational reflection', body: 'Like Yunus, we can ask Allah for help and forgiveness.', kind: 'explanation' },
+      { title: 'Activity', body: 'Think of one time you can ask Allah for forgiveness, such as after you make a mistake.', kind: 'activity' }],
     discussion: 'Who can you ask for help when you feel worried?', quiz: [] },
   { id: 'islam-prayer-times', category: 'islam', title: 'Five prayers through the day', subtitle: 'From dawn to night', topic: 'Salah', source: prayerTimesSource, review: reviewDraft(), stepByStep: true,
     sections: [
@@ -100,7 +100,7 @@ export const islamLessons: EducationLesson[] = [
       { title: 'Asr', body: 'Asr is prayed in the afternoon.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
       { title: 'Maghrib', body: 'Maghrib is prayed just after the sun sets.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
       { title: 'Isha', body: 'Isha is prayed at night, after the evening twilight has gone.', kind: 'source_fact', sourceReference: prayerTimesSource.sourceReference, illustration: 'mosque' },
-      { title: 'Make a prayer chart', body: 'With your adult, find today’s prayer times for your town from your local masjid. Draw the sun moving across the sky and mark each prayer on it.', kind: 'activity' },
+      { title: 'Make a prayer chart', body: 'Find today’s prayer times for your town, for example on your local masjid’s timetable. Draw the sun moving across the sky and mark each prayer on it.', kind: 'activity' },
     ], discussion: 'Which prayer is closest to when you wake up? Which is closest to bedtime?', quiz: [
       { id: 'prayer-times-order', type: 'order', prompt: 'Put the five prayers in order, starting at dawn.', items: [{ id: 'fajr', label: 'Fajr' }, { id: 'dhuhr', label: 'Dhuhr' }, { id: 'asr', label: 'Asr' }, { id: 'maghrib', label: 'Maghrib' }, { id: 'isha', label: 'Isha' }], correctOrder: ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'], explanation: 'Fajr, Dhuhr, Asr, Maghrib, then Isha.', sourceReference: prayerTimesSource.sourceReference },
       question('prayer-times-maghrib', 'Which prayer comes just after sunset?', 'Maghrib', ['Fajr', 'Dhuhr'], prayerTimesSource.sourceReference)] },
@@ -109,7 +109,7 @@ export const islamLessons: EducationLesson[] = [
       { title: 'Wudu first', body: 'Allah tells the believers to wash for prayer. This washing is called wudu.', kind: 'source_fact', sourceReference: "Qur'an 5:6", illustration: 'hands' },
       { title: 'Face the Qiblah', body: 'Muslims face the Sacred Mosque in Makkah when they pray. This direction is called the Qiblah.', kind: 'source_fact', sourceReference: qiblahSource.sourceReference, illustration: 'mosque' },
       { title: 'Pray calmly', body: 'The Prophet ﷺ taught a man to pray calmly and not rush, staying still in each position.', kind: 'source_fact', sourceReference: postureSource.sourceReference, illustration: 'standing' },
-      { title: 'Get ready together', body: 'Ask your adult to show you your family’s prayer space and how you get your clothes and place ready.', kind: 'activity', illustration: 'standing' },
+      { title: 'Get ready', body: 'Find a clean, quiet place to pray, wear clean clothes and face the Qiblah.', kind: 'activity', illustration: 'standing' },
     ], discussion: 'What helps you feel calm before you start to pray?', quiz: [
       question('prayer-ready-wudu', 'What washing do we do before prayer?', 'Wudu', ['Bathing the dog', 'Washing the car'], "Qur'an 5:6"),
       question('prayer-ready-qiblah', 'What is the Qiblah?', 'The direction of the Sacred Mosque in Makkah', ['A kind of food', 'A prayer time'], qiblahSource.sourceReference)] },
@@ -117,7 +117,7 @@ export const islamLessons: EducationLesson[] = [
     sections: [
       { title: 'What is iman?', body: 'In a famous hadith, the angel Jibril asked the Prophet ﷺ about iman (faith). The answer named six things to believe in.', kind: 'source_fact', sourceReference: 'Sahih Muslim 8' },
       { title: 'The six', body: 'Believe in Allah, His angels, His books, His messengers, the Last Day, and in Allah’s decree (qadar), the good and the bad.', kind: 'source_fact', sourceReference: 'Sahih Muslim 8' },
-      { title: 'Learn one at a time', body: 'Choose one of the six with your adult this week and learn something about it together, such as the books Allah sent.', kind: 'activity' },
+      { title: 'Learn one at a time', body: 'Choose one of the six this week and learn something about it, such as the books Allah sent.', kind: 'activity' },
     ], discussion: 'Which of the six would you like to learn more about first?', quiz: [
       question('iman-count', 'How many pillars of faith are named in this hadith?', 'Six', ['Two', 'Ten'], 'Sahih Muslim 8'),
       question('iman-angels', 'Which of these is one of the six?', 'Belief in Allah’s angels', ['Belief in lucky charms', 'Belief in fortune tellers'], 'Sahih Muslim 8')] },
@@ -141,14 +141,14 @@ export const islamLessons: EducationLesson[] = [
 
 export const duaLessons: EducationLesson[] = duaFixtures.map(dua => ({ id: dua.id, category: 'duas', title: dua.title,
   subtitle: `${dua.category} • Read and memorize`, topic: dua.category, source: dua.source, review: dua.review, duaId: dua.id,
-  sections: [{ title: 'Learn together', body: 'Read the Arabic with a parent or teacher. Transliteration is a reading aid and does not replace learning pronunciation.', kind: 'activity' },
-    ...(dua.verseKey ? [{ title: 'Find it in the Qur’an', body: `This supplication is in the Qur’an at ${dua.verseKey}. Read the whole ayah and a published translation together in the Qur’an reader.`, kind: 'activity' as const, sourceReference: `Qur'an ${dua.verseKey}` }] : [])],
-  discussion: 'Choose one short phrase to practice together today.', quiz: [] }));
+  sections: [{ title: 'How to read it', body: 'Read the Arabic slowly. The transliteration helps you say the words; the meaning tells you what you are asking Allah for.', kind: 'activity' },
+    ...(dua.verseKey ? [{ title: 'Find it in the Qur’an', body: `This supplication is in the Qur’an at ${dua.verseKey}. Read the whole ayah with its translation in the Qur’an reader.`, kind: 'activity' as const, sourceReference: `Qur'an ${dua.verseKey}` }] : [])],
+  discussion: 'Choose one short phrase to practise today.', quiz: [] }));
 
 /** Full Salah and Wudu guides behind the Salah and Wudu tiles. Shown to children only after review and publication. */
 export const guideLessons: EducationLesson[] = [
   { id: 'guide-salah', category: 'islam', title: 'Salah — Learn to Pray', subtitle: 'Rak‘ah-by-rak‘ah guide for the five daily prayers', topic: 'Salah', source: postureSource, review: reviewDraft(), stepByStep: true,
-    sections: salahReviewSections(), discussion: 'Which part of the prayer would you like to practise with your teacher next?', quiz: [
+    sections: salahReviewSections(), discussion: 'Which part of the prayer would you like to practise next?', quiz: [
       question('guide-salah-fajr', 'How many rak‘ahs does Fajr have?', '2', ['3', '4'], 'Sahih al-Bukhari 757'),
       question('guide-salah-maghrib', 'How many rak‘ahs does Maghrib have?', '3', ['2', '4'], 'Sahih al-Bukhari 757'),
       question('guide-salah-fatihah', 'Which surah is recited in every rak‘ah?', 'Al-Fatihah', ['Al-Baqarah', 'Yasin'], 'Sahih al-Bukhari 756'),

@@ -11,7 +11,7 @@ import { HadithProviderError } from '../src/services/hadith/HadithProvider';
 import { hadithFixtures } from '../src/content/fixtures/hadith';
 import { allLessons, lessonSourceRegistry } from '../src/content/lessons/catalog';
 import { duaFixtures } from '../src/content/lessons/duas';
-import { canParentPublishLesson, canShowReviewedContent, publishReviewedLesson, validAgeRange, visibleLessons } from '../src/content/lessons/approval';
+import { canParentPublishLesson, canShowReviewedContent, isPublishedForFamily as isPublishedForFamilyCheck, publishReviewedLesson, validAgeRange, visibleLessons } from '../src/content/lessons/approval';
 import { quizReviewLines } from '../src/content/lessons/quizReview';
 import { agePracticeGuidance } from '../src/content/lessons/ageGuidance';
 import { reviewContentHash } from '../src/content/lessons/reviewContent';
@@ -288,9 +288,8 @@ test('the parent quiz preview exposes actual choices, matching keys, and orderin
 
 test('age guidance gives short supported practice to younger children without adding religious facts', () => {
   assert.ok(agePracticeGuidance(5).includes('one small step'));
-  assert.ok(agePracticeGuidance(9).includes('tell them what you learned'));
-  assert.ok(agePracticeGuidance(14).includes('ask your teacher'));
-  assert.ok(agePracticeGuidance(null).includes('with your adult'));
+  assert.ok(agePracticeGuidance(9).includes('what you learned'));
+  for (const age of [null, 5, 9, 14]) assert.doesNotMatch(agePracticeGuidance(age), /teacher|adult|parent/i, 'the app teaches directly');
 });
 
 test('review fingerprints reject changed teaching or ages even if a stale import keeps its version and attestation', async () => {
@@ -343,4 +342,35 @@ test('parent authorization revoked during awaited writes rolls back approval and
       assert.equal(visibleLessons(await loadStoredLessons(db), false).length, 0);
     } finally { close(); }
   }
+});
+
+test('an app update replaces an outdated stored copy of a bundled lesson and needs a new approval, keeping the chosen ages', async () => {
+  const { db, close } = localDb();
+  try {
+    await db.execAsync(schema);
+    const review = new LessonReviewRepository(db, () => true);
+    await review.openForFamily('guide-salah', { reviewer: 'Parent', ageRange: { min: 6, max: 12 }, confirmed: true });
+    // Simulate the copy an older app version stored: different bundled wording and no catalog hash.
+    const row = await db.getFirstAsync<{ payload_json: string }>('SELECT payload_json FROM lessons WHERE id=?', 'guide-salah');
+    const old = JSON.parse(row!.payload_json);
+    delete old.catalogHash;
+    old.sections = old.sections.map((section: { body: string; arabic?: string }, index: number) => index === 0 ? { ...section, body: 'Older wording.' } : { ...section, arabic: undefined });
+    old.review.reviewedContentHash = reviewContentHash(old);
+    await db.runAsync('UPDATE lessons SET payload_json=? WHERE id=?', JSON.stringify(old), 'guide-salah');
+    // Reading before the next seed never shows the outdated copy and never throws.
+    const beforeSeed = (await loadStoredLessons(db)).find(lesson => lesson.id === 'guide-salah')!;
+    assert.equal(beforeSeed.sections[0].body, allLessons.find(lesson => lesson.id === 'guide-salah')!.sections[0].body);
+    assert.equal(isPublishedForFamilyCheck(beforeSeed), false);
+    await seedReviewLessons(db);
+    const replaced = (await loadStoredLessons(db)).find(lesson => lesson.id === 'guide-salah')!;
+    assert.ok(replaced.sections.some(section => section.arabic), 'the new Arabic is shown');
+    assert.deepEqual(replaced.ageRange, { min: 6, max: 12 });
+    assert.equal(isPublishedForFamilyCheck(replaced), false, 'new wording needs a new parent approval');
+    assert.equal(isPublishedForFamilyCheck(await review.openForFamily('guide-salah', { reviewer: 'Parent', ageRange: { min: 6, max: 12 }, confirmed: true })), true);
+    // A parent's own edit on the current bundle is kept by later seeds.
+    const current = (await review.list()).find(lesson => lesson.id === 'islam-parents')!;
+    await review.edit(current.id, current.review.version, { sections: current.sections.map((section, index) => ({ title: section.title, body: index === 0 ? 'Our family wording.' : section.body })), discussion: current.discussion, ageRange: { min: 5, max: 10 } });
+    await seedReviewLessons(db);
+    assert.equal((await loadStoredLessons(db)).find(lesson => lesson.id === 'islam-parents')!.sections[0].body, 'Our family wording.');
+  } finally { close(); }
 });

@@ -27,7 +27,7 @@ export default function GuideApprove({ id, done, back }: { id: GuideId; done: ()
   };
   return <Screen title={`Open ${names[id]}`} back={back}>
     <Body>Look through the guide with your child’s teacher or imam (or yourself, if you are confident in it). When you are happy with it, open it here. You can withdraw it any time in Parent Mode → Review educational explanations.</Body>
-    <Card><Text style={styles.note}>Please check the hadith references in this guide. They were written from scholarly knowledge and not machine-verified against the books. Where schools differ, the guide lists the views without a ruling.</Text></Card>
+    <Card><Text style={styles.note}>The Arabic words of the prayer and wudu are copied exactly from the cited hadith (Sahih al-Bukhari, Sahih Muslim, Abu Dawud and Ibn Majah), and every reference was checked against the hadith text. Where schools differ, the guide lists the differences without a ruling.</Text></Card>
     <Card>
       <Field label="Who checked it (your name, teacher or imam)" value={reviewer} onChangeText={setReviewer} maxLength={120} editable={!busy} />
       <Text style={styles.label}>From age</Text>

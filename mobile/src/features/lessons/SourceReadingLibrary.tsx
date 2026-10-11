@@ -81,7 +81,7 @@ export function SourceReadingLibrary({ category, childId, fontSize, networkAllow
     const listed = records.filter(item => (!savedOnly || savedIds.includes(item.id))
       && (!query || `${item.title} ${item.topic} ${item.canonicalText} ${item.translation} ${item.transliteration?.text ?? ''} ${item.source.sourceReference}`.toLocaleLowerCase().includes(query)));
     return <View style={styles.stack}>
-      <Card><Text accessibilityRole="header" style={styles.heading}>Read together</Text><Text style={body}>{records.length} short source selections, ready offline. Read with your adult and practice at your own pace.</Text><Text style={styles.caption}>Arabic and translations are selected from Sunnah.com. Each reading shows its reference.</Text></Card>
+      <Card><Text accessibilityRole="header" style={styles.heading}>Readings</Text><Text style={body}>{records.length} short source selections, ready offline. Practise at your own pace.</Text><Text style={styles.caption}>Arabic and translations are selected from Sunnah.com. Each reading shows its reference.</Text></Card>
       <View style={styles.row}><View style={styles.flex}><Button label={`All ${noun}`} secondary={savedOnly} onPress={() => setSavedOnly(false)} /></View><View style={styles.flex}><Button label={`Saved (${savedIds.length})`} secondary={!savedOnly} onPress={() => setSavedOnly(true)} /></View></View>
       <TextInput accessibilityLabel={`Search ${noun} in Arabic or English`} placeholder="Search a reading or source" placeholderTextColor={colors.muted} value={search} onChangeText={setSearch} style={styles.search} />
       {listed.map(item => <Card key={item.id}><Text style={styles.heading}>{item.title}</Text><Text style={styles.caption}>{item.topic}</Text><Text accessibilityLanguage="ar" style={[styles.arabic, { fontSize: Math.max(28, fontSize * 0.85), lineHeight: Math.max(48, fontSize * 1.5) }]}>{item.canonicalText}</Text><Text style={styles.caption}>{item.source.sourceReference}</Text><Button label={`Read ${item.title}`} onPress={() => { setSelected(item.id); setPracticing(false); setHidden(false); setMessage(''); }} /></Card>)}
@@ -104,15 +104,14 @@ export function SourceReadingLibrary({ category, childId, fontSize, networkAllow
       <Text style={styles.caption}>Arabic and English: {record.source.sourceReference}, {record.source.sourceName}</Text>
       <Text style={styles.caption}>{record.source.translationName}</Text>
       {!!record.narrator && <Text style={styles.caption}>Narrator: {record.narrator}</Text>}
-      {record.audioUri && focused ? <AudioControls key={record.id} tracks={[{ id: `${record.id}:source-audio`, title: record.title, uri: record.audioUri, sourceLabel: record.source.sourceReference }]} networkAllowed={networkAllowed} audioEnabled={audioEnabled} /> : category === 'duas' && <Text style={styles.caption}>A source recording is not supplied for this selection. Practice pronunciation with your adult.</Text>}
+      {record.audioUri && focused ? <AudioControls key={record.id} tracks={[{ id: `${record.id}:source-audio`, title: record.title, uri: record.audioUri, sourceLabel: record.source.sourceReference }]} networkAllowed={networkAllowed} audioEnabled={audioEnabled} /> : category === 'duas' && <Text style={styles.caption}>There is no recording for this selection yet. Read the Arabic slowly with the transliteration.</Text>}
       <Button label={savedIds.includes(record.id) ? 'Remove from saved readings' : '★ Save this reading'} secondary disabled={busy || loadingSaved || !childId} onPress={() => { void toggleSaved(); }} />
     </Card>
     <Button label="😊 I practiced reading" disabled={busy || !childId} onPress={() => { void complete(); }} />
     {category === 'duas' && <>
       <Button label={practicing ? 'Return to reading' : 'Practice from memory'} secondary onPress={() => { setPracticing(!practicing); setHidden(false); }} />
-      {practicing && <Card><Text style={body}>Read with your adult, repeat, then hide the reading and try from memory.</Text><Button label={hidden ? 'Show the reading' : 'Hide the reading'} secondary onPress={() => setHidden(!hidden)} /><Button label="★ Mark as memorized" disabled={busy || !childId} onPress={() => { void complete(true); }} /><Text style={styles.caption}>You and your adult mark your progress. The app does not judge pronunciation.</Text></Card>}
+      {practicing && <Card><Text style={body}>Read it, repeat it, then hide the reading and try from memory.</Text><Button label={hidden ? 'Show the reading' : 'Hide the reading'} secondary onPress={() => setHidden(!hidden)} /><Button label="★ Mark as memorized" disabled={busy || !childId} onPress={() => { void complete(true); }} /><Text style={styles.caption}>Mark it when you can say it from memory.</Text></Card>}
     </>}
-    <Text style={styles.caption}>Read selections with an adult. Ask a qualified teacher about religious questions.</Text>
     {!!message && <Text accessibilityLiveRegion="polite" style={body}>{message}</Text>}
   </View>;
 }

@@ -45,7 +45,7 @@ export default function SalahScreen() {
     return <Screen title={`${view.prayer.name} · ${view.prayer.rakahs} rak‘ahs`} back={back}>
       <Row>{plan.map(item => <Button key={item.number} label={`${item.number === view.rakah ? '✓ ' : ''}Rak‘ah ${item.number}`} secondary={item.number !== view.rakah} onPress={() => setView({ ...view, rakah: item.number, step: 0 })} />)}</Row>
       <Text style={styles.caption}>Rak‘ah {view.rakah} of {plan.length} · step {view.step + 1} of {rakah.steps.length}</Text>
-      <Card>{step.illustration && <LessonIllustration kind={step.illustration} />}<Text style={styles.heading}>{step.title}</Text><Text style={styles.body}>{step.action}</Text>{audio && <NarrationButton text={`${step.title}. ${step.action}`} label="▶ Hear this step" />}</Card>
+      <Card>{step.illustration && <LessonIllustration kind={step.illustration} />}<Text style={styles.heading}>{step.title}</Text><Text style={styles.body}>{step.action}</Text>{step.note && <Text style={styles.caption}>Reference: {step.note}</Text>}{audio && <NarrationButton text={`${step.title}. ${step.action}`} label="▶ Hear this step" />}</Card>
       {step.recitation && <RecitationCard recitation={step.recitation} fontSize={settings.fontSize} audioEnabled={audio} networkAllowed={settings.networkEnabled} />}
       <Row><Button label="Previous" secondary disabled={view.step === 0 && view.rakah === 1} onPress={previous} /><Button label={lastStep && lastRakah ? 'Check what I learned' : 'Next'} onPress={next} /></Row>
     </Screen>;
@@ -53,8 +53,8 @@ export default function SalahScreen() {
   if (view.name === 'quiz') {
     return <Screen title={`${view.prayer.name} quiz`} back={back}>
       <QuizEngine questions={guide.lesson.quiz} audioEnabled={audio} networkAllowed={settings.networkEnabled} title="Check what you learned" onComplete={async score => {
-        try { await saveProgress(`salah:${view.prayer.id}`, score); setMessage(score >= 80 ? 'MashaAllah! Your Salah lesson is saved.' : 'Practise once more with your adult and try again.'); }
-        catch { setMessage('Your practice could not be saved. Ask a parent for help.'); }
+        try { await saveProgress(`salah:${view.prayer.id}`, score); setMessage(score >= 80 ? 'MashaAllah! Your Salah lesson is saved.' : 'Read the steps once more and try again.'); }
+        catch { setMessage('Your practice could not be saved. Please try again.'); }
       }} />
       {!!message && <Body>{message}</Body>}
       <Button label="Record my Salah practice" secondary onPress={() => router.push({ pathname: '/record', params: { kind: 'salah_demonstration', itemRef: view.prayer.id, title: `${view.prayer.name} prayer` } })} />
@@ -74,7 +74,7 @@ export default function SalahScreen() {
       <Text style={styles.heading}>Different ways to pray</Text>
       <Text style={styles.body}>Muslims follow recognised schools of Islamic law. They agree on the prayer’s main parts and differ on some details, such as:</Text>
       {SCHOOL_DIFFERENCES.map(item => <Text key={item} style={styles.caption}>• {item}</Text>)}
-      <Text style={styles.body}>Your family’s choice: {SALAH_APPROACHES[guide.approach]}. Your teacher will show you these details.</Text>
+      <Text style={styles.body}>Your family follows: {SALAH_APPROACHES[guide.approach]}. Every school’s way is based on evidence from the Prophet ﷺ.</Text>
       <Text style={styles.caption}>{SALAH_REFERENCE_NOTE}</Text>
     </Card>
   </Screen>;

@@ -99,7 +99,7 @@ export function MemorizationScreen({ title, arabic, translation, words, passages
     {level !== 'complete' && tracks.length > 0 && !(level === 'repeat' && tracks.length > 1) && <AudioControls key={level} tracks={tracks} networkAllowed={networkAllowed} audioEnabled={audioEnabled} repeat={3} />}
     {level === 'repeat' && tracks.length > 1 && <RepeatPlanPlayer tracks={tracks} networkAllowed={networkAllowed} audioEnabled={audioEnabled} />}
     {(level === 'listen' || level === 'repeat') && (!tracks.length || !audioEnabled) && <Text style={styles.caption}>
-      {!audioEnabled ? 'Audio is off. Ask a parent to enable it, or practice reading with a teacher.' : 'No recording is available for this item. You can practice reading with a teacher and continue.'}
+      {!audioEnabled ? 'Audio is off. Read the Arabic slowly and continue.' : 'No recording is available for this item. Read the Arabic slowly and continue.'}
     </Text>}
     <Text style={styles.caption}>This is your practice journal. The app does not judge your recitation and does not record your voice.</Text>
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}

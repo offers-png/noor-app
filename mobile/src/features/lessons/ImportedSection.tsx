@@ -42,7 +42,7 @@ export function ImportedSection({ kind, childId, fontSize, onComplete }: { kind:
   };
   const categories = [...new Set(items.map(item => item.category))];
   return <View style={styles.stack}>
-    <Text style={styles.section}>{kind === 'hadith' ? 'More hadith from your parent' : 'More duas from your parent'}</Text>
+    <Text style={styles.section}>{kind === 'hadith' ? 'More hadith' : 'More duas'}</Text>
     {categories.map(category => <View key={category} style={styles.stack}>
       <Text style={styles.heading}>{category}</Text>
       {items.filter(item => item.category === category).map(item => <Card key={item.id}>
@@ -51,7 +51,7 @@ export function ImportedSection({ kind, childId, fontSize, onComplete }: { kind:
           <SourceText text={item.record.canonicalText} arabic fontSize={fontSize} />
           <SourceText text={item.record.translation} />
           <Text style={styles.caption}>Grading: {item.record.grades.length ? item.record.grades.map(grade => `${grade.grade} (${grade.gradedBy})`).join(', ') : 'none supplied by the source'}</Text>
-          <Text style={styles.caption}>Source: Sunnah.com · {collectionTitle(item.record.collection)} {item.record.hadithNumber}. Read it with your adult; they can explain what it means.</Text>
+          <Text style={styles.caption}>Source: Sunnah.com · {collectionTitle(item.record.collection)} {item.record.hadithNumber}.</Text>
           <Button label={saved.includes(item.id) ? '★ Saved' : '☆ Save'} secondary disabled={!childId} onPress={() => void toggle(item.id)} />
           <Button label="I practised it from memory" secondary disabled={!childId} onPress={() => void onComplete(`imported:${item.id}`).then(() => setMessage('Practice saved.')).catch(() => setMessage('Practice could not be saved.'))} />
           <Button label="● Record my recitation" onPress={() => router.push({ pathname: '/record', params: { kind: kind === 'dua' ? 'dua_recitation' : 'hadith_memorization', itemRef: item.id, title: `${collectionTitle(item.record.collection)} ${item.record.hadithNumber}` } })} />

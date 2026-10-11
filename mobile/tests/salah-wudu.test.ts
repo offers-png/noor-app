@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { schema } from '../src/database/migrations/001';
 import { schemaV2 } from '../src/database/migrations/002';
 import type { Database, SqlValue } from '../src/services/database/types';
+import { PRAYER_ARABIC } from '../src/content/salah/prayerArabic';
 import { PRAYERS, RECITATIONS, rakahDifferences, rakahPlan, WUDU_STEPS, WUDU_TOPICS, SCHOOL_DIFFERENCES } from '../src/content/salah/salahGuide';
 import { SEEDED_AYAHS } from '../src/services/quran/FixtureQuranProvider';
 import audioManifest from '../src/content/fixtures/quran-audio-manifest.json';
@@ -53,9 +54,33 @@ test('Qur’an recited in the guide is the bundled verified text with bundled au
     for (const key of recitation.quranKeys ?? []) { assert.ok(SEEDED_AYAHS.some(ayah => ayah.key === key), `${key} is bundled`); assert.ok(audioManifest.clips.some(clip => clip.key === key) && readFileSync(new URL(`../assets/quran/${key.replace(':', '-')}.mp3`, import.meta.url)).byteLength > 1000, `${key} has bundled audio`); }
   }
   assert.equal(RECITATIONS.fatihah.quranKeys!.length, 7);
-  const tashahhud = RECITATIONS.tashahhud as { arabic?: string };
-  assert.equal(tashahhud.arabic, undefined, 'no unverified Arabic for non-Qur’anic words');
   assert.ok(SCHOOL_DIFFERENCES.length >= 3);
+});
+
+test('every non-Qur’anic phrase in the guides is exact Arabic cut from its cited hadith', () => {
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/prayer-hadith-sources.json', import.meta.url), 'utf8')) as { sources: Record<string, { reference: string; arabic: string }> };
+  const used = [...Object.values(RECITATIONS), ...WUDU_STEPS.flatMap(step => step.recitation ? [step.recitation] : [])].filter(item => !item.quranKeys);
+  assert.ok(used.length >= 11);
+  for (const recitation of used) {
+    assert.ok(recitation.arabic?.length && recitation.arabicSource, `${recitation.id} shows its Arabic`);
+    const source = fixture.sources[PRAYER_ARABIC[recitation.arabicSource!].source];
+    assert.ok(source, `${recitation.id} source is in the fixture`);
+    assert.ok(recitation.reference.includes(source.reference), `${recitation.id} cites ${source.reference}`);
+    for (const part of recitation.arabic!) assert.ok(source.arabic.includes(part), `${recitation.id}: “${part}” appears exactly in ${source.reference}`);
+    assert.ok(recitation.transliteration && recitation.meaning, `${recitation.id} has transliteration and meaning`);
+  }
+  assert.equal(RECITATIONS.tashahhud.arabic!.length, 2);
+  assert.equal(RECITATIONS.salawat.arabic!.length, 2);
+});
+
+test('child-facing guide and lesson text teaches directly instead of sending the child to a teacher or adult', () => {
+  const texts = [
+    ...Object.values(RECITATIONS).flatMap(item => [item.name, item.meaning]),
+    ...PRAYERS.flatMap(prayer => rakahPlan(prayer).flatMap(plan => plan.steps.flatMap(step => [step.title, step.action]))),
+    ...WUDU_STEPS.flatMap(step => [step.title, step.action]), ...WUDU_TOPICS.flatMap(topic => topic.points),
+    ...allLessons.flatMap(lesson => [lesson.subtitle, lesson.discussion, ...lesson.sections.flatMap(section => [section.title, section.body])]),
+  ];
+  for (const text of texts) assert.doesNotMatch(text, /teacher|your adult|an adult|with a parent|ask your parent|your parents? (will|can) (teach|show|explain)/i, text);
 });
 
 test('wudu: ten steps in the Qur’anic order with counts; topics cover invalidators, mistakes, water and ghusl', () => {

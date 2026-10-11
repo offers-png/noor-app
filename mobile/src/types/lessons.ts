@@ -35,6 +35,8 @@ export interface LessonAgeRange { min: number; max: number }
 export interface LessonSection {
   title: string;
   body: string;
+  /** Exact Arabic wording from the cited source, shown above the body. */
+  arabic?: string;
   kind: 'source_fact' | 'explanation' | 'activity';
   sourceReference?: string;
   illustration?: 'hands' | 'mouth' | 'face' | 'arms' | 'head' | 'feet' | 'standing' | 'bowing' | 'prostration' | 'sitting' | 'mosque' | 'boat' | 'ocean';
@@ -56,6 +58,8 @@ export interface EducationLesson {
   stepByStep?: boolean;
   /** Proposed until the exact version is reviewed and published by the parent. */
   ageRange?: LessonAgeRange;
+  /** Hash of the bundled content this stored copy was made from; a new app version with different content replaces it. */
+  catalogHash?: string;
 }
 export interface HadithRecord {
   readonly id: string;
