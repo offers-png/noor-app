@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { Body, Button, Card, Field, Screen, colors } from '../../components/Common/ui';
 import { getDb } from '../../services/database/database';
 import { configuredContentConnection } from '../../services/quran/config';
-import { searchStoryVideos, STORY_TOPICS, StoryVideoLibrary, type ApprovedVideo, type CheckedVideo, type StoryTopic } from '../../services/videos/StoryVideos';
+import { searchStoryVideos, STORY_TOPICS, SUGGESTED_CHANNELS, StoryVideoLibrary, type ApprovedVideo, type CheckedVideo, type StoryTopic } from '../../services/videos/StoryVideos';
 import { useAppStore } from '../../state/appStore';
 import { VideoPlayer } from './VideoPlayer';
 
@@ -31,21 +31,30 @@ export default function VideosAdmin({ back }: { back: () => void }) {
     catch (error) { setMessage(error instanceof Error ? error.message : 'That did not work.'); }
     finally { setBusy(false); }
   };
+  const search = (handle: string) => void run(async () => {
+    const connection = await configuredContentConnection(); if (!connection) throw new Error('Save your content server address in Content downloads first.');
+    const found = await searchStoryVideos(connection.url, topic, handle, () => useAppStore.getState().settings.networkEnabled);
+    setResults(found); setPreview(undefined); setConfirmed(false);
+    return found.length ? `${found.length} videos passed the checks. Watch before approving.` : 'No suitable videos found for this topic on that channel. Try another channel or topic.';
+  });
   return <Screen title="Story videos" back={back}>
-    <Body>Choose YouTube videos your children can watch inside the app. Search a channel you trust, watch each video yourself, then approve it.</Body>
+    <Body>Choose YouTube videos your children can watch inside the app. Pick a topic, tap a channel, watch each video yourself, then approve it.</Body>
     <Card><Text style={styles.caption}>The server only shows public, Made for Kids videos of 20 minutes or less. It cannot judge religious accuracy or how prophets are shown. Many families avoid videos that picture prophets; please check this yourself. YouTube may still show ads, and videos need internet.</Text></Card>
     {!settings.networkEnabled && <Card><Text style={styles.body}>Turn on optional network access in Parent Mode to search and play videos.</Text></Card>}
     {!!message && <Card><Text accessibilityRole="alert" style={styles.body}>{message}</Text></Card>}
     <Card>
       <Text style={styles.heading}>Topic</Text>
       <View style={styles.row}>{(Object.keys(STORY_TOPICS) as StoryTopic[]).map(value => <Button key={value} label={`${topic === value ? '✓ ' : ''}${STORY_TOPICS[value]}`} secondary={topic !== value} onPress={() => setTopic(value)} />)}</View>
-      <Field label="Trusted YouTube channel (@handle or channel link)" value={channel} onChangeText={setChannel} autoCapitalize="none" autoCorrect={false} />
-      <Button label="Search this channel" disabled={busy || !settings.networkEnabled || !channel.trim()} onPress={() => void run(async () => {
-        const connection = await configuredContentConnection(); if (!connection) throw new Error('Save your content server address in Content downloads first.');
-        const found = await searchStoryVideos(connection.url, topic, channel, () => useAppStore.getState().settings.networkEnabled);
-        setResults(found); setPreview(undefined); setConfirmed(false);
-        return found.length ? `${found.length} videos passed the checks. Watch before approving.` : 'No suitable videos found for this topic on that channel.';
-      })} />
+    </Card>
+    <Card>
+      <Text style={styles.heading}>Suggested channels</Text>
+      <Text style={styles.caption}>Tap a channel to see its videos about “{STORY_TOPICS[topic]}”.</Text>
+      {SUGGESTED_CHANNELS.map(item => <Button key={item.handle} label={`${channel === item.handle ? '✓ ' : ''}${item.name}`} secondary={channel !== item.handle} disabled={busy || !settings.networkEnabled} onPress={() => { setChannel(item.handle); search(item.handle); }} />)}
+    </Card>
+    <Card>
+      <Text style={styles.heading}>Another channel</Text>
+      <Field label="YouTube channel (@handle or channel link)" value={channel} onChangeText={setChannel} autoCapitalize="none" autoCorrect={false} />
+      <Button label="Search this channel" disabled={busy || !settings.networkEnabled || !channel.trim()} onPress={() => search(channel)} />
     </Card>
     {results.map(video => <Card key={video.id}>
       <Text style={styles.heading}>{video.title}</Text>

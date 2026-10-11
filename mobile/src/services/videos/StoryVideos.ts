@@ -11,6 +11,17 @@ export const STORY_TOPICS = {
   musa: 'Prophet Musa (Moses)', yunus: 'Prophet Yunus (Jonah)', yusuf: 'Prophet Yusuf (Joseph)', kindness: 'Kindness',
 } as const;
 export type StoryTopic = keyof typeof STORY_TOPICS;
+/** Channels the family chose as starting points. Every video found still passes the server checks and the parent's own approval. */
+export const SUGGESTED_CHANNELS: readonly { name: string; handle: string }[] = Object.freeze([
+  { name: 'Omar & Hana', handle: '@omarhanaislamicsongsforkids' },
+  { name: 'Muslim Kids TV', handle: '@muslimkidstvofficial' },
+  { name: 'One4Kids (Zaky)', handle: '@one4kids-zaky' },
+  { name: 'Noor Kids', handle: '@noorkids' },
+  { name: 'Quran Stories (Stories of the Prophets)', handle: '@StoriesoftheProphets' },
+  { name: 'Kalam Kids', handle: '@kalamkids' },
+  { name: 'Islamic Kids National', handle: '@islamickidsnational' },
+  { name: 'Salam Muslim Kids', handle: '@SalamMuslimKids' },
+]);
 export interface CheckedVideo { id: string; title: string; channelTitle: string; channelId: string; durationSeconds: number; checkedAt: string }
 export interface ApprovedVideo extends CheckedVideo { topic: StoryTopic; approvedAt: string }
 const KEY = 'story-videos:v1';

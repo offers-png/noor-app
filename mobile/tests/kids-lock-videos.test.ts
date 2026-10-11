@@ -80,3 +80,12 @@ test('only a parent approves videos, after watching; the player cannot navigate 
   assert.equal(allowPlayerNavigation({ url: 'https://www.youtube.com/watch?v=x', isTopFrame: true }, base), false, 'tapping the YouTube logo does not leave the app');
   assert.equal(allowPlayerNavigation({ url: 'https://www.youtube-nocookie.com/embed/x', isTopFrame: false }, base), true);
 });
+
+test('every suggested YouTube channel is a handle the content server accepts', async () => {
+  const { SUGGESTED_CHANNELS } = await import('../src/services/videos/StoryVideos');
+  const server = await import('node:fs').then(fs => fs.readFileSync(new URL('../../server/storyVideos.mjs', import.meta.url), 'utf8'));
+  const pattern = new RegExp(/const CHANNEL_HANDLE = \/(.+)\/;/.exec(server)![1]);
+  assert.ok(SUGGESTED_CHANNELS.length >= 8);
+  assert.equal(new Set(SUGGESTED_CHANNELS.map(item => item.handle.toLowerCase())).size, SUGGESTED_CHANNELS.length, 'no duplicates');
+  for (const item of SUGGESTED_CHANNELS) assert.match(item.handle, pattern, item.name);
+});
