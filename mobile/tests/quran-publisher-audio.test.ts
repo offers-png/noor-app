@@ -8,7 +8,7 @@ import { AYAH_COUNTS, createContentHandler } from '../server/proxy.mjs';
 import { transferQuranAudio, verifiedAudioPath, type AudioDownloadRuntime } from '../src/services/quran/QuranAudioDownloadEngine';
 import { estimateAudioDownloads } from '../src/services/quran/QuranAudioDownloads';
 import { commitTanzilText, prepareTanzilText } from '../src/services/quran/QuranLicensedText';
-import { fetchPublisherAudio, publisherAudioIsFresh, publisherAudioPlan, publisherAudioStatus, readPublisherAudio, removePublisherAudio, savePublisherAudio, validatePublisherAudio } from '../src/services/quran/QuranPublisherAudio';
+import { fetchPublisherAudio, publisherAudioIsFresh, publisherAudioUrl, publisherAudioPlan, publisherAudioStatus, readPublisherAudio, removePublisherAudio, savePublisherAudio, validatePublisherAudio } from '../src/services/quran/QuranPublisherAudio';
 import { QuranRepository } from '../src/services/quran/QuranRepository';
 
 function database() {
@@ -52,12 +52,17 @@ test('Al-Baqarah recitation: proxy list → stored metadata → size check → c
     const consent = { unchangedUseConfirmed: true };
     await commitTanzilText(db, await prepareTanzilText('arabic', { proxyUrl: 'https://site.example/content', networkAllowed: () => true, consent, fetcher }), consent, () => true);
     const repository = new QuranRepository(async () => db);
-    assert.equal((await repository.verses(2)).every(ayah => !ayah.audio), true, 'No recitation is advertised before the list is fetched');
+    // Before any sync the reader can still stream every ayah from the publisher; nothing is stored on the phone.
+    const streamed = await repository.verses(2);
+    assert.equal(streamed.length, 286);
+    assert.ok(streamed.every(ayah => ayah.audio?.url && !ayah.audio.localUri), 'every ayah can be heard online');
+    assert.equal(streamed[0].audio!.url, 'https://cdn.islamic.network/quran/audio/128/ar.alafasy/8.mp3');
 
     const metadata = await fetchPublisherAudio('https://site.example/content/', 2, () => true, fetcher);
     assert.ok(log.includes('https://api.alquran.cloud/v1/surah/2/ar.alafasy'));
     assert.equal(metadata.ayahs.length, 286); assert.equal(metadata.ayahs[0].url, 'https://cdn.islamic.network/quran/audio/128/ar.alafasy/8.mp3');
     await savePublisherAudio(db, metadata, () => true);
+    assert.deepEqual(streamed.map(ayah => ayah.audio!.url), metadata.ayahs.map(item => item.url), 'derived addresses equal the publisher list');
     assert.deepEqual(await readPublisherAudio(db, 2), metadata);
     assert.equal(publisherAudioIsFresh(metadata), true);
 
@@ -138,4 +143,12 @@ test('size check uses Content-Length when present and rejects HTML error pages',
   assert.deepEqual(methods, ['HEAD', 'HEAD', 'HEAD', 'HEAD']);
   const html = (async (_input: unknown, init?: RequestInit) => init?.method === 'HEAD' ? new Response(null) : new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })) as typeof fetch;
   await assert.rejects(estimateAudioDownloads(plan, () => true, html), /reliable size/);
+});
+
+test('the derived recitation address matches the publisher list for every surah', () => {
+  for (let surah = 1; surah <= 114; surah++) {
+    const listed = publisherSurah(surah).data.ayahs.map(ayah => ayah.audio);
+    assert.deepEqual(Array.from({ length: AYAH_COUNTS[surah - 1] }, (_, index) => publisherAudioUrl(surah, index + 1)), listed, `surah ${surah}`);
+  }
+  assert.equal(publisherAudioUrl(106, 5), null); assert.equal(publisherAudioUrl(115, 1), null);
 });

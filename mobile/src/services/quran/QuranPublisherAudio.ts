@@ -22,6 +22,12 @@ function ayahOffset(surah: number): number {
   return ALL_SURAHS.filter(chapter => chapter.number < surah).reduce((sum, chapter) => sum + chapter.ayahCount, 0);
 }
 export function publisherAudioDownloadId(key: string, url: string): string { return `${storageKey}:${key}:${url}`; }
+/** The publisher's address for one ayah, from its global ayah number. Used to stream surahs that were never synced. */
+export function publisherAudioUrl(surah: number, ayah: number): string | null {
+  const chapter = ALL_SURAHS.find(item => item.number === surah);
+  if (!chapter || !Number.isInteger(ayah) || ayah < 1 || ayah > chapter.ayahCount) return null;
+  return `https://cdn.islamic.network/quran/audio/128/${PUBLISHER_AUDIO_EDITION}/${ayahOffset(surah) + ayah}.mp3`;
+}
 
 /** Independently re-check the proxy response against Tanzil chapter counts and the publisher URL scheme. */
 export function validatePublisherAudio(payload: unknown, surah: number, syncedAt = new Date().toISOString()): PublisherAudioMetadata {

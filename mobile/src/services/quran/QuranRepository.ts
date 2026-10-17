@@ -11,7 +11,7 @@ import { bundledPublishedMeaning } from '../../content/fixtures/QuranMeaning';
 import { readTanzilText } from './QuranLicensedText';
 import { isEnglishTafsir, tafsirVerseRange } from './QuranTafsir';
 import { QuranProviderError } from './QuranProvider';
-import { PUBLISHER_AUDIO_RECITER, PUBLISHER_AUDIO_SOURCE, publisherAudioDownloadId, readPublisherAudio } from './QuranPublisherAudio';
+import { PUBLISHER_AUDIO_RECITER, PUBLISHER_AUDIO_SOURCE, publisherAudioDownloadId, publisherAudioUrl, readPublisherAudio } from './QuranPublisherAudio';
 
 const seedOperations = new WeakMap<Database, Promise<void>>();
 
@@ -104,9 +104,11 @@ export class QuranRepository {
     }
     // Publisher-permitted recitation fills ayahs without bundled or parent-selected Quran Foundation audio.
     const publisherAudio = await readPublisherAudio(db, surahNumber);
-    if (publisherAudio) for (const ayah of ayahs) {
-      const row = publisherAudio.ayahs.find(item => item.key === ayah.key);
-      if (row && !ayah.audio) ayah.audio = { url: row.url, reciter: PUBLISHER_AUDIO_RECITER, source: { ...PUBLISHER_AUDIO_SOURCE, reference: ayah.key }, downloadId: publisherAudioDownloadId(row.key, row.url) };
+    // Without a synced list the same publisher address is derived from the ayah number, so every surah can be heard online.
+    for (const ayah of ayahs) {
+      if (ayah.audio) continue;
+      const url = publisherAudio?.ayahs.find(item => item.key === ayah.key)?.url ?? publisherAudioUrl(ayah.surahNumber, ayah.ayahNumber);
+      if (url) ayah.audio = { url, reciter: PUBLISHER_AUDIO_RECITER, source: { ...PUBLISHER_AUDIO_SOURCE, reference: ayah.key }, downloadId: publisherAudioDownloadId(ayah.key, url) };
     }
     for(const ayah of ayahs)if(ayah.audio?.downloadId){ayah.audio.localUri=await verifiedLocalQuranAudio(db,ayah.audio.downloadId);}
     return ayahs;

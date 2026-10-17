@@ -64,3 +64,7 @@ Native APK build and installed acceptance results are recorded below when comple
 4. For QF audio/tafsir, provision approved `QF_CLIENT_ID` and `QF_CLIENT_SECRET` on the server only. On Netlify use Functions-scoped environment variables and redeploy. `QF_ENV=production` is required for the full canonical core. Never paste these values into public Expo variables or the app.
 5. Choose an available reciter or English tafsir from actual metadata, sync it, check actual coverage/sizes, and explicitly confirm audio files. A failed sync leaves prior offline content intact.
 6. Review teaching in Parent Mode → Review educational explanations. Save ages/edits, request review, record a real named reviewer attestation, then separately approve and publish for your family. Drafts stay hidden in normal Kids Mode until this is done.
+
+## 1.2.5: every surah can be heard online
+
+Surahs whose recitation list was never synced now stream the same Alafasy recording. The address is derived from the ayah's global number (cdn.islamic.network/quran/audio/128/ar.alafasy/N.mp3), which a test checks against the publisher list for all 114 surahs. Streaming needs network access to be on in Parent Mode. To listen offline, download the surah in Content downloads; the downloaded file is then used automatically.
